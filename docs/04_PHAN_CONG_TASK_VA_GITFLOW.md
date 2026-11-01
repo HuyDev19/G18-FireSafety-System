@@ -68,3 +68,6 @@ git pull origin develop
 git push -u origin feature/G18-xx-ten-ngan-gon
 ```
 * **Tiêu chuẩn Hoàn thành (DoD):** (1) Đạt Acceptance Criteria; (2) Có validate DTO và kiểm tra phân quyền dữ liệu ở Backend Service; (3) UI xử lý đủ trạng thái Loading/Empty/Error; (4) `npm run build` và CI báo xanh; (5) Được Leader review và Squash Merge vào `develop`.
+
+
+

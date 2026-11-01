@@ -2,7 +2,8 @@
 
 Tài liệu này tổng hợp 5 sơ đồ chuẩn hóa dựa trên cấu trúc thư mục, 14 bảng Prisma và 16 module chức năng (`FR-01` -> `FR-16`) của dự án.
 
-Anh em cài extention "Markdown Preview Mermaid Support" rồi bấm "Ctrl Shhift V" để xem sơ đồ
+*(Mẹo: Cài extension **"Markdown Preview Mermaid Support"** rồi bấm **`Ctrl + Shift + V`** để xem trực tiếp sơ đồ đồ họa).*
+
 ---
 
 ## 1. Sơ đồ Kiến trúc Tổng thể 4 Tầng & Ranh giới 5 Role (System Architecture)
@@ -114,7 +115,7 @@ flowchart LR
         direction TB
         
         subgraph GRP_ADMIN ["Nhóm Quản trị Hệ thống"]
-            UC_ADM["• FR-01: Quản lý Users, Phân quyền & Khóa tài khoản<br/>• FR-02: Xóa mềm Cơ sở & Quản lý Danh mục gốc"]
+            UC_ADM["• FR-01: Quản lý Users, Phân quyền, Reset MK & Khóa tài khoản<br/>• FR-02: Xóa mềm Cơ sở & Quản lý Danh mục gốc"]
         end
 
         subgraph GRP_LEADER ["Nhóm Chỉ đạo, Phân công & Phê duyệt"]
@@ -122,11 +123,11 @@ flowchart LR
         end
 
         subgraph GRP_INSP ["Nhóm Tác nghiệp Kiểm tra Địa bàn"]
-            UC_INS["• FR-02, 04, 08, 13: Tạo/Sửa Cơ sở, Thiết bị, Hồ sơ & Import Excel<br/>• FR-06 & 15: Thực hiện Checklist Kiểm tra & In Biên bản PDF có QR<br/>• FR-07 & 09: Ghi nhận Vi phạm/Sự cố & Xem Bản đồ số PCCC"]
+            UC_INS["• FR-02, 04, 08, 13: Tạo/Sửa Cơ sở, Thiết bị, Hồ sơ & Import Excel<br/>• FR-06 & 15: Thực hiện Checklist Kiểm tra & In Biên bản PDF có QR<br/>• FR-07 & 09: Ghi nhận/Nghiệm thu Vi phạm (verify-resolve) & Xem Bản đồ số"]
         end
 
         subgraph GRP_OWNER ["Nhóm Chủ cơ sở Tự theo dõi"]
-            UC_OWN["• FR-02 & 08: Xem Hồ sơ & Lịch kiểm tra của cơ sở mình<br/>• FR-07: Báo cáo khắc phục vi phạm kèm ảnh (/api/violations/:id/resolve)"]
+            UC_OWN["• FR-01, 02 & 08: Đổi mật khẩu, Xem Hồ sơ & Lịch kiểm tra của cơ sở mình<br/>• FR-07: Gửi ảnh báo cáo khắc phục vi phạm -> Chờ duyệt (report-fix)"]
         end
 
         subgraph GRP_PUBLIC ["Cổng Tra cứu Công khai (Không cần Token)"]
@@ -177,14 +178,14 @@ sequenceDiagram
     actor LDR as 👨‍💼 Lãnh đạo (LEADER)
 
     rect rgb(239, 246, 255)
-        Note over INS,DB: BƯỚC 1: TẢI CHECKLIST & ĐÍNH KÈM ẢNH MINH CHỨNG (FR-06, FR-08)
+        Note over INS,DB: BƯỚC 1: TẢI CHECKLIST, LƯU NHÁP LOCALSTORAGE & ĐÍNH KÈM ẢNH (FR-06, FR-08)
         INS->>+FE5: Mở trang kiểm tra từ lịch (/inspections/:scheduleId)
         FE5->>+BE4: GET /api/inspections/criteria
         BE4->>+DB: Lấy danh mục InspectionCriteria đang active
         DB-->>-BE4: Trả về danh sách tiêu chí
         BE4-->>-FE5: Hiển thị form Checklist theo nhóm
         
-        INS->>FE5: Đánh giá từng mục (PASS / FAIL / NA) & Chọn ảnh chụp hiện trường
+        INS->>FE5: Đánh giá từng mục (PASS / FAIL / NA) -> Tự lưu nháp vào localStorage
         FE5->>+BE4: POST /api/documents/upload (File JPG/PNG <= 10MB)
         BE4->>+DB: Lưu vào MinIO bucket 'pccc-files'
         DB-->>-BE4: Trả về fileUrl
@@ -206,7 +207,7 @@ sequenceDiagram
         
         DB-->>-BE4: Commit Transaction
         BE4-->>-FE5: Trả về { success: true, data: inspection }
-        FE5-->>-INS: Thông báo nộp thành công & Cập nhật huy hiệu Mức độ nguy hiểm
+        FE5-->>-INS: Xóa nháp localStorage, báo thành công & Cập nhật huy hiệu Mức độ nguy hiểm
     end
 
     rect rgb(240, 253, 244)
@@ -229,13 +230,13 @@ sequenceDiagram
 ```mermaid
 %%{init: {'theme': 'base', 'flowchart': {'curve': 'stepAfter'}}}%%
 flowchart TD
-    START(["⚡ Kích hoạt khi: Tạo/Sửa Cơ sở | Đổi Thiết bị | Nộp Kiểm tra | Thêm Vi phạm/Sự cố"])
+    START(["⚡ Kích hoạt khi: Tạo/Sửa Cơ sở | Đổi Thiết bị | Nộp Kiểm tra | Nghiệm thu Vi phạm/Sự cố"])
     
     subgraph CALC ["TÍNH TOÁN 4 NHÓM TIÊU CHÍ (Tổng tối đa 100 điểm)"]
         direction LR
         C1["1. Loại hình cơ sở (Max 30đ)<br/>• Xăng dầu/Hóa chất: 30đ<br/>• Nhà xưởng: 22đ<br/>• Karaoke/Chợ/TTTM: 20đ<br/>• Chung cư/Trường/Viện: 12đ<br/>• Văn phòng nhỏ: 5đ"]
         C2["2. Quy mô (Max 20đ)<br/>• > 5.000m² hoặc >= 7 tầng: 20đ<br/>• 1.000 – 5.000m²: 15đ<br/>• 300 – 1.000m²: 10đ<br/>• < 300m²: 5đ"]
-        C3["3. Thiết bị PCCC (Max 25đ)<br/>• Tỷ lệ thiết bị thiếu hoặc<br/>  hết hạn/hỏng × 25đ"]
+        C3["3. Thiết bị PCCC (Max 25đ)<br/>• Kiểm tra requiredEquipCount > 0<br/>• (Số thiết bị thiếu/hết hạn ÷<br/>  Tổng bắt buộc) × 25đ"]
         C4["4. Lịch sử 12 tháng (Max 25đ)<br/>• Vi phạm nghiêm trọng: +8đ/lỗi<br/>• Vi phạm thường: +3đ/lỗi<br/>• Sự cố cháy nổ: +10đ/vụ"]
     end
 
@@ -246,7 +247,7 @@ flowchart TD
     MED["🟡 Mức TRUNG BÌNH (MEDIUM)<br/>35 – 64 điểm<br/>Chu kỳ gợi ý: 6 tháng"]
     HIGH["🔴 Mức CAO (HIGH)<br/>65 – 100 điểm<br/>Chu kỳ gợi ý: 3 tháng"]
 
-    SAVE[("Lưu vào bảng Facility (riskScore, riskLevel)<br/>& tạo bản ghi lịch sử trong bảng RiskAssessment")]
+    SAVE[("Lưu vào bảng Facility (riskScore, riskLevel)<br/>& tạo bản ghi lịch sử kèm breakdown trong bảng RiskAssessment")]
 
     START --> C1 & C2 & C3 & C4
     C1 & C2 & C3 & C4 --> SUM
@@ -273,7 +274,7 @@ flowchart TD
 
 ```mermaid
 erDiagram
-    User ||--o{ Facility : "assignedInspector"
+    User ||--o{ Facility : "assignedInspector / ownerUser"
     User ||--o{ InspectionSchedule : "inspector"
     User ||--o{ Inspection : "inspector / approvedBy"
     User ||--o{ Notification : "receives"
@@ -297,10 +298,11 @@ erDiagram
     User {
         string id PK
         string email UK
-        string phone 
+        string phone "SDT lien lac va xac minh"
         RoleCode role "ADMIN | LEADER | INSPECTOR | OWNER"
         string areaCode
         boolean isActive
+        boolean mustChangePassword
         datetime lockedUntil
         datetime deletedAt
     }
@@ -319,7 +321,8 @@ erDiagram
         string code UK
         string name
         string facilityTypeId FK
-        string assignedInspectorId FK
+        string ownerUserId FK "Tai khoan Chu co so (OWNER)"
+        string assignedInspectorId FK "Can bo phu trach (INSPECTOR)"
         float areaM2
         int floors
         float latitude
