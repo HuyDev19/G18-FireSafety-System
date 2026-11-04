@@ -27,12 +27,12 @@ You are ONLY allowed to create or modify files inside the specific folder assign
 - **Role 3 (Backend 1 - Core DB, Auth, Risk Engine & Audit):**
   - Allowed Backend: `backend-api/prisma/schema.prisma`, `src/main.ts`, `src/common/`, `src/modules/auth/`, `src/modules/users/`, `src/modules/facilities/`, `src/modules/equipments/`, `src/modules/audit/`.
 - **Role 4 (Backend 2 - Inspection Workflow, Storage, Public API & CI/CD):**
-  - Allowed Backend: `backend-api/docker-compose.yml`, `.github/workflows/`, `src/modules/schedules/`, `src/modules/inspections/`, `src/modules/violations/`, `src/modules/documents/`, `src/modules/public/`, `src/jobs/`.
+  - Allowed Backend: `.github/workflows/`, `src/modules/schedules/`, `src/modules/inspections/`, `src/modules/violations/`, `src/modules/documents/`, `src/modules/public/`, `src/jobs/`.
 - **Role 5 (Fullstack 2 - Inspection UI, Dashboard, Reporting, Seed & QA):**
   - Allowed Backend: `backend-api/prisma/seed.ts`, `src/modules/reports/`.
   - Allowed Frontend: `frontend-web/src/features/inspections/`, `src/features/dashboard/`.
 
-- **STRICT PROHIBITION:** NEVER touch shared root files (`App.tsx`, `main.tsx`, `package.json`, `apiClient.ts`, `useAuthStore.ts`, `pccc.types.ts`, `schema.prisma`, `docker-compose.yml`) unless the user explicitly states they are the assigned Owner of that root file.
+- **STRICT PROHIBITION:** NEVER touch shared root files (`App.tsx`, `main.tsx`, `package.json`, `apiClient.ts`, `useAuthStore.ts`, `pccc.types.ts`, `schema.prisma`) unless the user explicitly states they are the assigned Owner of that root file.
 - Keep each file modular and under 300 lines.
 
 ## 4. BUSINESS LOGIC, NAMING & UI CONVENTIONS

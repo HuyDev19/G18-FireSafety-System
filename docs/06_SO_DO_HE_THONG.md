@@ -50,10 +50,10 @@ flowchart TB
     end
 
     %% ==================== TẦNG 4: INFRASTRUCTURE ====================
-    subgraph T4 ["TẦNG 4: HẠ TẦNG DOCKER & CI/CD (Owner: Role 4)"]
+    subgraph T4 ["TẦNG 4: HẠ TẦNG CLOUD & CI/CD (PostgreSQL + PostGIS & S3 Storage)"]
         direction LR
-        PG_DB[("🗄️ PostgreSQL 16 + PostGIS (Port 5432)<br/>Container: g18_pccc_postgres (14 Bảng)")]
-        MINIO_S3[("📦 MinIO Object Storage (Port 9000/9001)<br/>Bucket: pccc-files (PDF & Ảnh <= 10MB)")]
+        PG_DB[("☁️ Cloud PostgreSQL 16 + PostGIS<br/>Supabase / Neon (14 Bảng CSDL dùng chung)")]
+        MINIO_S3[("📦 MinIO / S3 Cloud Storage<br/>Bucket: pccc-files (PDF & Ảnh <= 10MB)")]
     end
 
     %% ==================== LUỒNG KẾT NỐI ====================
