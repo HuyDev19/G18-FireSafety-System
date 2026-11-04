@@ -59,12 +59,12 @@
                 +------------------+----------+               |                             |
                                    v                          v                             |
 ====================================================================================================
- TẦNG 4: DỮ LIỆU, LƯU TRỮ & PIPELINE CI/CD (DOCKER COMPOSE & GITHUB ACTIONS)
+ TẦNG 4: DỮ LIỆU, LƯU TRỮ & PIPELINE CI/CD (CLOUD DATABASE & GITHUB ACTIONS)
 ====================================================================================================
   +-----------------------------------------+   +---------------------------+   +-------------------------+
-  | POSTGRESQL 16 + POSTGIS (Cổng 5432)     |   | MINIO / VOLUME STORAGE    |   | GITHUB ACTIONS CI/CD    |
-  | • Lưu 14 Bảng CSDL chuẩn hóa [ROLE 3]   |   | • Lưu PDF Hồ sơ pháp lý   |   | • Tự động Lint, Build,  |
-  | • Hỗ trợ xóa mềm (deletedAt) & GiST GIS |   | • Lưu Ảnh minh chứng <=10M|   |   Unit Test mỗi khi PR  |
+  | CLOUD POSTGRESQL 16 + POSTGIS           |   | MINIO / CLOUD S3 STORAGE  |   | GITHUB ACTIONS CI/CD    |
+  | • Lưu 14 Bảng CSDL dùng chung 5 Roles   |   | • Lưu PDF Hồ sơ pháp lý   |   | • Tự động Lint, Build,  |
+  | • Supabase / Neon (sslmode=require)     |   | • Lưu Ảnh minh chứng <=10M|   |   Unit Test mỗi khi PR  |
   +-----------------------------------------+   +---------------------------+   +-------------------------+
 ```
 
@@ -118,54 +118,66 @@ G18-FireSafety-System/
     |   |   |-- public/               # [Role 4 - BE 2] API Tra cứu công khai có Rate Limit (FR-16)
     |   |   \-- reports/              # [Role 5 - Fullstack] API Dashboard & 7 Báo cáo xuất Excel/PDF (FR-10, 11)
     |   \-- main.ts                   # [Role 3 giữ khóa] Cấu hình CORS, Helmet, Validation & Swagger UI
-    \-- docker-compose.yml            # [Role 4 giữ khóa] Chạy PostgreSQL 16/PostGIS & MinIO
+|   \-- .env.example              # [Role 3 điều phối] Mẫu kết nối Cloud DB & JWT chung
 ```
 
 * **Quy tắc bên trong mỗi Module NestJS:** Mọi module trong `backend-api/src/modules/<ten-module>/` đều thống nhất gồm: `<name>.module.ts`, `<name>.controller.ts` (chỉ nhận request/trả response), `<name>.service.ts` (xử lý nghiệp vụ, kiểm tra quyền dữ liệu), thư mục `dto/` (validate bằng `class-validator`) và `<name>.service.spec.ts` (Unit test).
 
 ---
 
-## 3. Cấu hình Docker Compose Chuẩn (`backend-api/docker-compose.yml`)
+## 3. Hướng dẫn Kết nối & Cấu hình Cloud PostgreSQL (Supabase / Neon + PostGIS)
 
-```yaml
-version: '3.8'
+Dự án sử dụng **Cloud PostgreSQL chung** cho cả 5 thành viên, giúp toàn đội ngũ làm việc trên cùng một nguồn dữ liệu duy nhất mà không cần cài đặt hay duy trì Docker container cục bộ.
 
-services:
-  postgres_db:
-    image: postgis/postgis:16-3.4-alpine
-    container_name: g18_pccc_postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: admin_pccc
-      POSTGRES_PASSWORD: password123
-      POSTGRES_DB: g18_fire_safety_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin_pccc -d g18_fire_safety_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+### 3.1. Kích hoạt Extension PostGIS trên Cloud DB
+Trước khi thực hiện migrate hoặc seed dữ liệu, Role 3 (hoặc người khởi tạo DB) mở SQL Editor trên giao diện web của Supabase hoặc Neon và thực thi:
+```sql
+-- Kích hoạt extension PostGIS phục vụ lưu trữ tọa độ không gian và bản đồ số PCCC
+CREATE EXTENSION IF NOT EXISTS postgis;
+```
 
-  minio_storage:
-    image: minio/minio:latest
-    container_name: g18_pccc_minio
-    restart: unless-stopped
-    environment:
-      MINIO_ROOT_USER: minio_admin
-      MINIO_ROOT_PASSWORD: password123
-    command: server /data --console-address ":9001"
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio_data:/data
+### 3.2. Cấu hình Chuỗi Kết nối Chung (`backend-api/.env`)
+Mỗi thành viên sao chép `backend-api/.env.example` thành `backend-api/.env` và sử dụng chuỗi kết nối Cloud PostgreSQL chung được cấp:
 
-volumes:
-  postgres_data:
-  minio_data:
+```env
+# Chuỗi kết nối Cloud PostgreSQL (Bắt buộc có ?sslmode=require)
+# Trường hợp dùng Supabase (Port 5432 Direct / Session Mode):
+DATABASE_URL="postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres?sslmode=require"
+
+# Trường hợp dùng Neon:
+# DATABASE_URL="postgresql://[USER]:[PASSWORD]@[ENDPOINT].neon.tech/neondb?sslmode=require"
+
+# Cổng khởi chạy Backend API
+PORT=3000
+
+# Secret Key cho JWT Authentication (Role 3 cấu hình)
+JWT_SECRET=super_secret_jwt_key_pccc_g18
+JWT_EXPIRES_IN=1d
+
+# Cấu hình MinIO / S3 Cloud Storage (Role 4 cấu hình)
+MINIO_ENDPOINT=localhost
+MINIO_PORT=9000
+MINIO_ACCESS_KEY=minio_admin
+MINIO_SECRET_KEY=password123
+MINIO_BUCKET_NAME=pccc-documents
+```
+
+### 3.3. Quy trình Thao tác với Cloud Database
+```bash
+cd backend-api
+
+# Bước 1: Cài đặt thư viện dependencies
+npm install
+
+# Bước 2: Sinh Prisma Client
+npx prisma generate
+
+# Bước 3: Đồng bộ cấu trúc 14 bảng lên Cloud DB (Role 3 thực hiện)
+npx prisma db push
+
+# Bước 4: Nạp 40 cơ sở mẫu & tài khoản 4 vai trò (Role 5 thực hiện)
+npx prisma db seed
+# hoặc: npm run seed
 ```
 
 ---
