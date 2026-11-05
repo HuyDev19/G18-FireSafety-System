@@ -1,33 +1,39 @@
 # 06. BỘ SƠ ĐỒ KIẾN TRÚC, NGHIỆP VỤ & CƠ SỞ DỮ LIỆU HỆ THỐNG G1.8 (PCCC)
 
-Tài liệu này tổng hợp 5 sơ đồ chuẩn hóa dựa trên cấu trúc thư mục, 14 bảng Prisma và 16 module chức năng (`FR-01` -> `FR-16`) của dự án.
+Tài liệu này tổng hợp 5 sơ đồ chuẩn hóa dựa trên cấu trúc thư mục, 14 bảng Prisma và 16 module chức năng (`FR-01` -> `FR-16`) của dự án, tuân thủ nghiêm ngặt mô hình an toàn thông tin GovTech 3 phân vùng mạng và bảo mật tài khoản đặc quyền.
 
 *(Mẹo: Cài extension **"Markdown Preview Mermaid Support"** rồi bấm **`Ctrl + Shift + V`** để xem trực tiếp sơ đồ đồ họa).*
 
 ---
 
 ## 1. Sơ đồ Kiến trúc Tổng thể 4 Tầng & Ranh giới 5 Role (System Architecture)
-*Khớp với cấu trúc thư mục tại `02_KIEN_TRUC_VA_CONG_NGHE.md` và phân công tại `04_PHAN_CONG_TASK_VA_GITFLOW.md`.*
+*Khớp với cấu trúc thư mục tại `02_KIEN_TRUC_VA_CONG_NGHE.md`, phân tách 3 cổng độc lập tại `05_HOP_DONG_API_VA_BAO_MAT.md` và phân công tại `04_PHAN_CONG_TASK_VA_GITFLOW.md`.*
 
 ```mermaid
 %%{init: {'theme': 'base', 'flowchart': {'curve': 'stepAfter', 'nodeSpacing': 40, 'rankSpacing': 50}}}%%
 flowchart TB
     %% ==================== TẦNG 1: ACTORS ====================
-    subgraph T1 ["TẦNG 1: 5 NHÓM ĐỐI TƯỢNG NGƯỜI DÙNG (ACTORS)"]
+    subgraph T1 ["TẦNG 1: 3 PHÂN VÙNG TRUY CẬP & ĐỐI TƯỢNG NGƯỜI DÙNG"]
         direction LR
-        ACT_AUTH["👮 Nhóm Đăng nhập Nội bộ (JWT)<br/>ADMIN | LEADER | INSPECTOR | OWNER"]
-        ACT_PUB["👥 Người dân (Không cần Login)<br/>PUBLIC"]
+        ACT_INTERNAL["👮 Cán bộ PCCC & Quản trị (GovNet / VPN / IP Whitelist)<br/>ADMIN | LEADER | INSPECTOR (Bắt buộc 2FA MFA)"]
+        ACT_OWNER["🏢 Chủ cơ sở Doanh nghiệp (Internet Public)<br/>OWNER (Tài khoản do Cán bộ Cấp phát - Zero Self-Reg)"]
+        ACT_PUB["👥 Người dân & Xã hội (Internet Public)<br/>PUBLIC (Tra cứu không cần Login, Rate Limited)"]
     end
 
     %% ==================== TẦNG 2: FRONTEND ====================
     subgraph T2 ["TẦNG 2: FRONTEND SPA (React 18 + Vite + TS + Tailwind - Port 5173)"]
         direction TB
-        APP_ROUTER{{"🧭 App.tsx Router + AdminLayout (RBAC Guard) & PublicLayout"}}
+        subgraph FE_PORTALS ["3 Cổng Giao diện Độc lập (App.tsx Router)"]
+            direction LR
+            PORTAL_INTERNAL["🔐 Cổng Nội bộ PCCC<br/>/admin-portal/login<br/>(2FA TOTP Form + AdminLayout)"]
+            PORTAL_OWNER["🏢 Cổng Doanh nghiệp<br/>/doanh-nghiep/login<br/>(OwnerLayout)"]
+            PORTAL_PUBLIC["🌐 Cổng Tra cứu Dân sự<br/>/tra-cuu<br/>(PublicLayout)"]
+        end
 
         subgraph FE_DIRS ["Thư mục src/features/ (Chia độc lập theo Role)"]
             direction LR
             FE_R1["🗺️ ROLE 1 (Leader)<br/>• features/gis-map/ (FR-09)<br/>• features/public-lookup/ (FR-16)"]
-            FE_R2["📋 ROLE 2 (FE 1)<br/>• features/auth/ (FR-01)<br/>• features/facilities/ (FR-02, 08, 13)<br/>• features/equipments/ (FR-04)<br/>• features/schedules/ (FR-05)"]
+            FE_R2["📋 ROLE 2 (FE 1)<br/>• features/auth/ (FR-01: 2 Cổng Login, 2FA, Provision)<br/>• features/facilities/ (FR-02, 08, 13)<br/>• features/equipments/ (FR-04)<br/>• features/schedules/ (FR-05)"]
             FE_R5["📊 ROLE 5 (Fullstack 2)<br/>• features/inspections/ (FR-06, 07, 15)<br/>• features/dashboard/ (FR-10, 11)"]
         end
 
@@ -37,32 +43,36 @@ flowchart TB
     %% ==================== TẦNG 3: BACKEND ====================
     subgraph T3 ["TẦNG 3: BACKEND MONOLITH (NestJS + TypeScript - Port 3000/api)"]
         direction TB
-        BE_GUARD{{"🛡️ src/common/: JwtAuthGuard | RolesGuard | ValidationPipe | RateLimit"}}
+        BE_GUARD{{"🛡️ src/common/: JwtAuthGuard | RolesGuard | MfaGuard | AntiBruteForce (Lock 15p) | RateLimit"}}
 
         subgraph BE_DIRS ["Thư mục src/modules/ & src/jobs/ (Chia độc lập theo Role)"]
             direction LR
-            BE_R3["⚙️ ROLE 3 (BE 1)<br/>• modules/auth/ & users/ (FR-01)<br/>• modules/facilities/ (FR-02, 03, 13)<br/>• modules/equipments/ (FR-04)<br/>• modules/audit/ (FR-12)"]
+            BE_R3["⚙️ ROLE 3 (BE 1)<br/>• modules/auth/ (internal/login, 2fa, owner/login)<br/>• modules/users/ (provision-owner, cấm tự đăng ký)<br/>• modules/facilities/ & equipments/ (FR-02, 03, 04)<br/>• modules/audit/ (Ghi log Brute-force & Thao tác)"]
             BE_R4["🔍 ROLE 4 (BE 2)<br/>• modules/schedules/ (FR-05)<br/>• modules/inspections/ (FR-06)<br/>• modules/violations/ (FR-07)<br/>• modules/documents/ (FR-08)<br/>• modules/public/ (FR-16)<br/>• src/jobs/ Cron 06:00 (FR-14)"]
-            BE_R5["📈 ROLE 5 (Fullstack 2)<br/>• modules/reports/ (FR-10, 11)<br/>• prisma/seed.ts (40 cơ sở mẫu)"]
+            BE_R5["📈 ROLE 5 (Fullstack 2)<br/>• modules/reports/ (FR-10, 11)<br/>• prisma/seed.ts (40 cơ sở mẫu + 4 user chuẩn)"]
         end
 
         PRISMA_ORM["🔗 Prisma Client ORM (prisma/schema.prisma - Owner: Role 3)"]
     end
 
     %% ==================== TẦNG 4: INFRASTRUCTURE ====================
-    subgraph T4 ["TẦNG 4: HẠ TẦNG CLOUD & CI/CD (PostgreSQL + PostGIS & S3 Storage)"]
+    subgraph T4 ["TẦNG 4: HẠ TẦNG CLOUD & BẢO MẬT (PostgreSQL + PostGIS & S3 Storage)"]
         direction LR
         PG_DB[("☁️ Cloud PostgreSQL 16 + PostGIS<br/>Supabase / Neon (14 Bảng CSDL dùng chung)")]
         MINIO_S3[("📦 MinIO / S3 Cloud Storage<br/>Bucket: pccc-files (PDF & Ảnh <= 10MB)")]
     end
 
     %% ==================== LUỒNG KẾT NỐI ====================
-    ACT_AUTH ==> APP_ROUTER
-    ACT_PUB -. "Truy cập /tra-cuu" .-> FE_R1
+    ACT_INTERNAL ==> PORTAL_INTERNAL
+    ACT_OWNER ==> PORTAL_OWNER
+    ACT_PUB -. "Truy cập trực tiếp" .-> PORTAL_PUBLIC
 
-    APP_ROUTER --> FE_R1
-    APP_ROUTER --> FE_R2
-    APP_ROUTER --> FE_R5
+    PORTAL_INTERNAL --> FE_R2
+    PORTAL_INTERNAL --> FE_R1
+    PORTAL_INTERNAL --> FE_R5
+    PORTAL_OWNER --> FE_R2
+    PORTAL_OWNER --> FE_R5
+    PORTAL_PUBLIC --> FE_R1
 
     FE_R1 --> API_CLIENT
     FE_R2 --> API_CLIENT
@@ -87,9 +97,9 @@ flowchart TB
     classDef be fill:#f0fdf4,stroke:#16a34a,color:#14532d,stroke-width:1.5px;
     classDef db fill:#faf5ff,stroke:#9333ea,color:#581c87,stroke-width:2px;
 
-    class ACT_AUTH,ACT_PUB actor;
-    class APP_ROUTER,API_CLIENT,BE_GUARD,PRISMA_ORM gateway;
-    class FE_R1,FE_R2,FE_R5 fe;
+    class ACT_INTERNAL,ACT_OWNER,ACT_PUB actor;
+    class BE_GUARD,PRISMA_ORM gateway;
+    class PORTAL_INTERNAL,PORTAL_OWNER,PORTAL_PUBLIC,FE_R1,FE_R2,FE_R5,API_CLIENT fe;
     class BE_R3,BE_R4,BE_R5 be;
     class PG_DB,MINIO_S3 db;
 ```
@@ -104,34 +114,34 @@ flowchart TB
 flowchart LR
     subgraph ACTORS ["5 NHÓM NGƯỜI DÙNG"]
         direction TB
-        A1(["👮 ADMIN"])
-        A2(["👨‍💼 LEADER"])
-        A3(["🕵️ INSPECTOR"])
-        A4(["🏢 OWNER"])
-        A5(["👥 PUBLIC"])
+        A1(["👮 ADMIN (Mạng nội bộ/VPN)"])
+        A2(["👨‍💼 LEADER (Mạng nội bộ/VPN)"])
+        A3(["🕵️ INSPECTOR (Mạng nội bộ/VPN)"])
+        A4(["🏢 OWNER (Doanh nghiệp)"])
+        A5(["👥 PUBLIC (Người dân)"])
     end
 
     subgraph SYSTEM ["16 MODULE CHỨC NĂNG HỆ THỐNG G1.8 PCCC"]
         direction TB
         
-        subgraph GRP_ADMIN ["Nhóm Quản trị Hệ thống"]
-            UC_ADM["• FR-01: Quản lý Users, Phân quyền, Reset MK & Khóa tài khoản<br/>• FR-02: Xóa mềm Cơ sở & Quản lý Danh mục gốc"]
+        subgraph GRP_ADMIN ["Nhóm Quản trị Hệ thống (Cổng /admin-portal/login + MFA)"]
+            UC_ADM["• FR-01: Quản lý Users, Reset MK, Khóa Brute-force & Cấu hình MFA<br/>• FR-02: Xóa mềm Cơ sở & Quản lý Danh mục gốc"]
         end
 
-        subgraph GRP_LEADER ["Nhóm Chỉ đạo, Phân công & Phê duyệt"]
-            UC_LDR["• FR-05: Tạo & Phân công Lịch kiểm tra (/api/schedules)<br/>• FR-06: Phê duyệt Kết quả Kiểm tra (/api/inspections/:id/approve)<br/>• FR-03 & 12: Ghi đè Điểm rủi ro & Tra cứu Audit Log<br/>• FR-10 & 11: Xem Dashboard Tổng quan & Xuất 7 Báo cáo Excel"]
+        subgraph GRP_LEADER ["Nhóm Chỉ đạo, Phân công & Phê duyệt (Cổng /admin-portal/login + MFA)"]
+            UC_LDR["• FR-05: Tạo & Phân công Lịch kiểm tra (/api/schedules)<br/>• FR-06: Phê duyệt Kết quả Kiểm tra (/api/inspections/:id/approve)<br/>• FR-03 & 12: Ghi đè Điểm rủi ro & Tra cứu Audit Log cảnh báo an ninh<br/>• FR-10 & 11: Xem Dashboard Tổng quan & Xuất 7 Báo cáo Excel"]
         end
 
-        subgraph GRP_INSP ["Nhóm Tác nghiệp Kiểm tra Địa bàn"]
-            UC_INS["• FR-02, 04, 08, 13: Tạo/Sửa Cơ sở, Thiết bị, Hồ sơ & Import Excel<br/>• FR-06 & 15: Thực hiện Checklist Kiểm tra & In Biên bản PDF có QR<br/>• FR-07 & 09: Ghi nhận/Nghiệm thu Vi phạm (verify-resolve) & Xem Bản đồ số"]
+        subgraph GRP_INSP ["Nhóm Tác nghiệp Kiểm tra Địa bàn (Cổng /admin-portal/login + MFA)"]
+            UC_INS["• FR-01: Cấp phát Tài khoản Chủ cơ sở (POST /api/users/provision-owner)<br/>• FR-02, 04, 08, 13: Tạo/Sửa Cơ sở, Thiết bị, Hồ sơ & Import Excel<br/>• FR-06 & 15: Thực hiện Checklist Kiểm tra & In Biên bản PDF có QR<br/>• FR-07 & 09: Ghi nhận/Nghiệm thu Vi phạm (verify-resolve) & Xem Bản đồ số"]
         end
 
-        subgraph GRP_OWNER ["Nhóm Chủ cơ sở Tự theo dõi"]
-            UC_OWN["• FR-01, 02 & 08: Đổi mật khẩu, Xem Hồ sơ & Lịch kiểm tra của cơ sở mình<br/>• FR-07: Gửi ảnh báo cáo khắc phục vi phạm -> Chờ duyệt (report-fix)"]
+        subgraph GRP_OWNER ["Nhóm Chủ cơ sở Tự theo dõi (Cổng /doanh-nghiep/login)"]
+            UC_OWN["• FR-01: Bắt buộc đổi mật khẩu lần đầu (mustChangePassword)<br/>• FR-02 & 08: Xem Hồ sơ số & Lịch kiểm tra của cơ sở mình<br/>• FR-07: Gửi ảnh báo cáo khắc phục vi phạm -> Chờ duyệt (report-fix)"]
         end
 
-        subgraph GRP_PUBLIC ["Cổng Tra cứu Công khai (Không cần Token)"]
-            UC_PUB["• FR-16: Tra cứu thông tin cơ sở & tình trạng PCCC (/tra-cuu)<br/>• Xem vị trí cơ sở trên Bản đồ công khai (/api/public/facilities)"]
+        subgraph GRP_PUBLIC ["Cổng Tra cứu Công khai (Route /tra-cuu - Không cần Token)"]
+            UC_PUB["• FR-16: Tra cứu thông tin cơ sở & tình trạng PCCC công khai<br/>• Xem vị trí cơ sở trên Bản đồ công khai (/api/public/facilities - Rate limited)"]
         end
     end
 
@@ -144,7 +154,6 @@ flowchart LR
     A3 ==> GRP_INSP
 
     A4 ==> GRP_OWNER
-    A4 -.-> GRP_PUBLIC
 
     A5 ==> GRP_PUBLIC
 
@@ -270,10 +279,11 @@ flowchart TD
 ---
 
 ## 5. Sơ đồ Quan hệ Thực thể 14 Bảng Cơ sở Dữ liệu (Prisma ERD Diagram)
-*Khớp 100% với 14 model trong `03_CSDL_PRISMA_VA_TYPES.md`.*
+*Khớp 100% với 14 model trong `03_CSDL_PRISMA_VA_TYPES.md`, tích hợp MFA TOTP và cấp phát định danh.*
 
 ```mermaid
 erDiagram
+    User ||--o{ User : "provisions / provisionedBy"
     User ||--o{ Facility : "assignedInspector / ownerUser"
     User ||--o{ InspectionSchedule : "inspector"
     User ||--o{ Inspection : "inspector / approvedBy"
@@ -301,9 +311,13 @@ erDiagram
         string phone "SDT lien lac va xac minh"
         RoleCode role "ADMIN | LEADER | INSPECTOR | OWNER"
         string areaCode
+        boolean isTwoFactorEnabled "Bat buoc voi Admin va Can bo"
+        string twoFactorSecret "Ma bi mat TOTP AES-256"
+        string provisionedById FK "Can bo cap tai khoan"
+        int failedLoginCount "Dem lan sai de khoa"
+        datetime lockedUntil "Khoa tam 15 phut neu sai 5 lan"
+        boolean mustChangePassword "Bat buoc doi lan dau"
         boolean isActive
-        boolean mustChangePassword
-        datetime lockedUntil
         datetime deletedAt
     }
 

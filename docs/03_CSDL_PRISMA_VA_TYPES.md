@@ -39,7 +39,7 @@ enum FacilityStatus {
   CLOSED         // Ngừng hoạt động
 }
 
-// 1. Bảng Tài khoản & Phân quyền (FR-01)
+// 1. Bảng Tài khoản & Phân quyền GovTech (FR-01)
 model User {
   id                  String               @id @default(uuid())
   email               String               @unique
@@ -50,8 +50,13 @@ model User {
   areaCode            String?              // Quận/Phường phụ trách
   isActive            Boolean              @default(true)
   mustChangePassword  Boolean              @default(false) // Bắt buộc đổi mật khẩu ở lần đăng nhập đầu
-  failedLoginCount    Int                  @default(0)
-  lockedUntil         DateTime?            // Khóa tạm 15 phút sau 5 lần đăng nhập sai
+  failedLoginCount    Int                  @default(0)     // Số lần đăng nhập sai liên tiếp
+  lockedUntil         DateTime?            // Khóa tạm 15 phút sau 5 lần đăng nhập sai (Anti-Brute force)
+  twoFactorSecret     String?              // Khóa bí mật TOTP MFA (Google Authenticator) cho Cán bộ/Admin
+  isTwoFactorEnabled  Boolean              @default(false) // Bật/tắt xác thực 2 bước
+  provisionedById     String?              // Cán bộ/Admin trực tiếp cấp phát tài khoản (Audit Danh tính)
+  provisionedBy       User?                @relation("UserProvisioning", fields: [provisionedById], references: [id])
+  provisionedUsers    User[]               @relation("UserProvisioning")
   lastLoginAt         DateTime?
   assignedFacilities  Facility[]           @relation("AssignedInspector")
   ownedFacilities     Facility[]           @relation("FacilityOwner") // Cơ sở thuộc quyền sở hữu (Role OWNER)
@@ -340,6 +345,21 @@ export interface UserProfile {
   role: RoleCode;
   areaCode?: string;
   mustChangePassword?: boolean;
+  isTwoFactorEnabled?: boolean;
+  provisionedById?: string;
+}
+
+export interface LoginResponse {
+  mfaRequired?: boolean;
+  tempToken?: string;
+  token?: string;
+  refreshToken?: string;
+  user?: UserProfile;
+}
+
+export interface VerifyMfaPayload {
+  tempToken: string;
+  totpCode: string;
 }
 
 export interface Facility {
