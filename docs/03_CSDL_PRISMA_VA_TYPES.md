@@ -49,10 +49,12 @@ model User {
   role                RoleCode             @default(INSPECTOR)
   areaCode            String?              // Quận/Phường phụ trách
   isActive            Boolean              @default(true)
+  mustChangePassword  Boolean              @default(false) // Bắt buộc đổi mật khẩu ở lần đăng nhập đầu
   failedLoginCount    Int                  @default(0)
   lockedUntil         DateTime?            // Khóa tạm 15 phút sau 5 lần đăng nhập sai
   lastLoginAt         DateTime?
   assignedFacilities  Facility[]           @relation("AssignedInspector")
+  ownedFacilities     Facility[]           @relation("FacilityOwner") // Cơ sở thuộc quyền sở hữu (Role OWNER)
   schedules           InspectionSchedule[]
   inspections         Inspection[]         @relation("InspectorUser")
   approvedInspections Inspection[]         @relation("ApproverUser")
@@ -91,6 +93,8 @@ model Facility {
   ownerName           String
   ownerPhone          String
   ownerEmail          String?
+  ownerUserId         String?              // Khóa ngoại liên kết tài khoản Chủ cơ sở (OWNER)
+  ownerUser           User?                @relation("FacilityOwner", fields: [ownerUserId], references: [id])
   assignedInspectorId String?
   assignedInspector   User?                @relation("AssignedInspector", fields: [assignedInspectorId], references: [id])
   latitude            Float                // Vĩ độ hiển thị trên Bản đồ số PCCC
@@ -114,6 +118,7 @@ model Facility {
 
   @@index([riskLevel, facilityTypeId])
   @@index([district, ward])
+  @@index([ownerUserId])
   @@index([nextInspectionDue])
 }
 
@@ -235,7 +240,7 @@ model Violation {
   legalBasis        String?
   actionTaken       String?
   deadline          DateTime
-  status            String      @default("OPEN")  // OPEN, FIXING, RESOLVED, OVERDUE
+  status            String      @default("OPEN")  // OPEN, FIXING (Chờ cán bộ nghiệm thu), RESOLVED, OVERDUE
   resolvedAt        DateTime?
   resolutionNote    String?
   evidenceImageUrls String[]
@@ -331,8 +336,10 @@ export interface UserProfile {
   id: string;
   email: string;
   fullName: string;
+  phone?: string;
   role: RoleCode;
   areaCode?: string;
+  mustChangePassword?: boolean;
 }
 
 export interface Facility {
@@ -351,6 +358,7 @@ export interface Facility {
   ownerName: string;
   ownerPhone: string;
   ownerEmail?: string;
+  ownerUserId?: string;
   assignedInspectorId?: string;
   latitude: number;
   longitude: number;

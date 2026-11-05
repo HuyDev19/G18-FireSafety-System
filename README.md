@@ -26,7 +26,7 @@ Mỗi thành viên phụ trách độc quyền các thư mục module riêng nh�
 | **ROLE 1**<br>*(Leader)* | **Team Leader, GIS & Public Portal Architect** | FR-09, FR-16 (FE), Kiến trúc, SRS | `frontend-web/src/features/gis-map/`<br>`frontend-web/src/features/public-lookup/`<br>Quản lý Router, Types & Axios dùng chung |
 | **ROLE 2** | **Frontend 1 (Core Management UI)** | FR-01, 02, 04, 05, 08, 13 (FE) | `frontend-web/src/layouts/`<br>`frontend-web/src/features/auth/`<br>`frontend-web/src/features/facilities/`<br>`frontend-web/src/features/equipments/`<br>`frontend-web/src/features/schedules/` |
 | **ROLE 3** | **Backend 1 (Core DB, Auth, Risk & Audit)** | FR-01, 02, 03, 04, 12, 13 (BE) | `backend-api/prisma/schema.prisma`<br>`backend-api/src/common/`<br>`backend-api/src/modules/auth/`, `users/`, `facilities/`, `equipments/`, `audit/` |
-| **ROLE 4** | **Backend 2 (Inspection, Files, Public & CI/CD)** | FR-05, 06, 07, 08, 14, 16 (BE) | `backend-api/docker-compose.yml`<br>`.github/workflows/`<br>`backend-api/src/modules/schedules/`, `inspections/`, `violations/`, `documents/`, `public/`, `jobs/` |
+| **ROLE 4** | **Backend 2 (Inspection, Files, Public & CI/CD)** | FR-05, 06, 07, 08, 14, 16 (BE) | `.github/workflows/`<br>`backend-api/src/modules/schedules/`, `inspections/`, `violations/`, `documents/`, `public/`, `jobs/` |
 | **ROLE 5** | **Fullstack 2 (Inspection UI, Dashboard, Report & QA)** | FR-06, 07, 10, 11, 15 + Seed/QA | `backend-api/prisma/seed.ts`<br>`backend-api/src/modules/reports/`<br>`frontend-web/src/features/inspections/`<br>`frontend-web/src/features/dashboard/` |
 
 ---
@@ -48,17 +48,19 @@ Nhóm phát triển tuân thủ tuyệt đối bộ 6 tài liệu chuẩn sau:
 
 ### Yêu cầu cài đặt
 - **Node.js:** phiên bản >= 18 (Khuyên dùng v20 hoặc v22)
-- **Docker Desktop** (hoặc PostgreSQL 16 + PostGIS)
+- **Cloud Database:** PostgreSQL 16 + PostGIS (kết nối trực tiếp tới Supabase hoặc Neon)
 
 ### Bước 1: Cài đặt biến môi trường
 Tạo file `.env` ở thư mục gốc hoặc trong từng module từ các file mẫu:
-- Backend: copy `backend-api/.env.example` -> `backend-api/.env`
+- Backend: copy `backend-api/.env.example` -> `backend-api/.env` (điền chuỗi kết nối Cloud PostgreSQL chung `DATABASE_URL`)
 - Frontend: copy `frontend-web/.env.example` -> `frontend-web/.env`
 
-### Bước 2: Khởi chạy Hạ tầng Database & MinIO
+### Bước 2: Đồng bộ CSDL Cloud & Nạp dữ liệu mẫu
 ```bash
 cd backend-api
-docker compose up -d
+npx prisma generate
+npx prisma db push
+npm run seed
 ```
 
 ### Bước 3: Cài đặt và Chạy Frontend
