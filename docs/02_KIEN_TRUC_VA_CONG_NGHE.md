@@ -74,7 +74,7 @@
   +-----------------------------------------+   +---------------------------+   +-------------------------+
   | CLOUD POSTGRESQL 16 + POSTGIS           |   | MINIO / CLOUD S3 STORAGE  |   | GITHUB ACTIONS CI/CD    |
   | • Lưu 14 Bảng CSDL dùng chung 5 Roles   |   | • Lưu PDF Hồ sơ pháp lý   |   | • Tự động Lint, Build,  |
-  | • Supabase / Neon (sslmode=require)     |   | • Lưu Ảnh minh chứng <=10M|   |   Unit Test mỗi khi PR  |
+  | • Neon Serverless Postgres (sslmode=require)     |   | • Lưu Ảnh minh chứng <=10M|   |   Unit Test mỗi khi PR  |
   +-----------------------------------------+   +---------------------------+   +-------------------------+
 ```
 
@@ -133,12 +133,12 @@ G18-FireSafety-System/
 
 ---
 
-## 3. Hướng dẫn Kết nối & Cấu hình Cloud PostgreSQL (Supabase / Neon + PostGIS)
+## 3. Hướng dẫn Kết nối & Cấu hình Cloud PostgreSQL (Neon Serverless Postgres + PostGIS)
 
 Dự án sử dụng **Cloud PostgreSQL chung** cho cả 5 thành viên, giúp toàn đội ngũ làm việc trên cùng một nguồn dữ liệu duy nhất mà không cần cài đặt hay duy trì Docker container cục bộ.
 
 ### 3.1. Kích hoạt Extension PostGIS trên Cloud DB
-Trước khi thực hiện migrate hoặc seed dữ liệu, Role 3 (hoặc người khởi tạo DB) mở SQL Editor trên giao diện web của Supabase hoặc Neon và thực thi:
+Trước khi thực hiện migrate hoặc seed dữ liệu, Role 3 (hoặc người khởi tạo DB) mở SQL Editor trên giao diện web của Neon Serverless Postgres và thực thi:
 ```sql
 -- Kích hoạt extension PostGIS phục vụ lưu trữ tọa độ không gian và bản đồ số PCCC
 CREATE EXTENSION IF NOT EXISTS postgis;

@@ -37,7 +37,7 @@
 | **FR-03** | **Đánh giá Mức độ Nguy hiểm** | Tự động tính điểm rủi ro (0–100 điểm) và phân mức **Thấp / Trung bình / Cao** khi thêm/sửa cơ sở, đổi thiết bị, có kết quả kiểm tra hoặc vi phạm mới. Cho phép ghi đè thủ công kèm lý do (lưu `RiskAssessment` & `AuditLog`). |
 | **FR-04** | **Quản lý Thiết bị PCCC** | Quản lý bình chữa cháy, báo khói, tủ báo cháy, bơm, đèn thoát hiểm... theo từng cơ sở. Tự động đánh dấu **Sắp hết hạn** (<= 30 ngày) và **Đã hết hạn** kiểm định; đối chiếu thiết bị bắt buộc theo loại cơ sở. |
 | **FR-05** | **Quản lý Lịch kiểm tra** | Tạo/phân công lịch (Định kỳ / Đột xuất / Tái kiểm tra); gợi ý tần suất theo mức nguy hiểm (Cao: 3 tháng, Trung bình: 6 tháng, Thấp: 12 tháng). Xem dạng bảng & lịch tháng/tuần; tự đánh dấu quá hạn (`OVERDUE`). |
-| **FR-06** | **Kết quả Kiểm tra (Checklist)** | Mở từ lịch -> nạp Checklist theo nhóm tiêu chí -> đánh giá `Đạt / Không đạt / Không áp dụng` kèm ghi chú & ảnh minh chứng. Cơ chế **tự lưu nháp vào `localStorage`** chống mất dữ liệu hiện trường. Khi nộp: **tự sinh Vi phạm** cho tiêu chí `Không đạt`, tính lại điểm rủi ro, chờ `LEADER` duyệt. |
+| **FR-06** | **Kết quả Kiểm tra (Checklist)** | Mở từ lịch -> nạp Checklist 16 tiêu chí theo nhóm & điều kiện áp dụng (tách riêng điểm Checklist lượt kiểm tra với điểm rủi ro FR-03) -> đánh giá `Đạt / Không đạt / Không áp dụng` kèm ghi chú & ảnh minh chứng. Cơ chế **tự lưu nháp vào `localStorage`** chống mất dữ liệu hiện trường. Khi nộp: sinh Vi phạm trạng thái chờ xác minh (`OPEN`/`PENDING_VERIFY`); khi `LEADER` duyệt mới chốt vi phạm & tính lại điểm rủi ro FR-03. |
 | **FR-07** | **Lịch sử Vi phạm & Sự cố (Luồng 2 Bước)** | Quản lý vòng đời Vi phạm chuẩn BA: `OPEN` -> `FIXING` (Chủ cơ sở gửi ảnh báo cáo khắc phục) -> `RESOLVED` (Cán bộ nghiệm thu xác nhận đạt, tự động giảm điểm phạt) / `OVERDUE`. Quản lý Sự cố (cháy, chập điện, rò rỉ, báo cháy giả) và hiển thị Timeline tổng hợp. |
 | **FR-08** | **Hồ sơ Điện tử Pháp lý** | Upload PDF/JPG/PNG (<= 10MB) lên MinIO: Giấy thẩm duyệt, nghiệm thu, phương án chữa cháy, biên bản... Quản lý số văn bản, ngày cấp, **ngày hết hiệu lực**, quản lý phiên bản (version) và xem trước. |
 | **FR-09** | **Bản đồ số PCCC (GIS)** | Hiển thị cơ sở theo màu mức nguy hiểm (Xanh/Vàng/Đỏ), gom cụm (**Marker Clustering**) khi zoom xa, bật/tắt Heatmap rủi ro. Lọc theo loại hình, mức nguy hiểm, quá hạn kiểm tra, vi phạm mở. |
@@ -50,7 +50,7 @@
 | **FR-12** | **Nhật ký Thao tác (Audit Log)** | Tự động ghi nhận ai, lúc nào, làm hành động gì, trên đối tượng nào, dữ liệu trước và sau (`beforeData`, `afterData` dạng JSON), địa chỉ IP, và ghi nhận sự kiện tấn công đăng nhập bất thường. |
 | **FR-13** | **Nhập Cơ sở từ Excel** | Tải file mẫu -> Upload -> Kiểm tra hợp lệ từng dòng, báo dòng lỗi -> Xem trước -> Xác nhận nhập hàng loạt. |
 | **FR-14** | **Cảnh báo Tự động** | Cronjob chạy 06:00 sáng hàng ngày quét lịch sắp đến hạn (7 ngày), thiết bị/hồ sơ hết hạn (30 ngày), vi phạm quá hạn để tạo thông báo trong ứng dụng. |
-| **FR-15** | **In Biên bản Kiểm tra PDF** | Xuất biên bản kiểm tra chuẩn thể thức hành chính có đầy đủ thông tin cơ sở, bảng kết quả checklist, kiến nghị và **Mã QR trỏ tới biên bản trên hệ thống**. |
+| **FR-15** | **In Biên bản Kiểm tra PDF** | Xuất biên bản kiểm tra chuẩn thể thức hành chính theo **Mẫu PC03 (Cán bộ kiểm tra) / Mẫu PC02 (Chủ cơ sở tự kiểm tra)** của NĐ 105/2025/NĐ-CP; kèm bảng kết quả checklist, kiến nghị và **Mã QR xác thực kèm SHA-256 hash** (người ngoài quét QR chỉ xem được thẻ xác thực hợp lệ, ẩn toàn bộ chi tiết vi phạm nội bộ). |
 | **FR-16** | **Tra cứu Công khai (`/tra-cuu`)** | Trang không cần đăng nhập cho người dân tìm theo tên/địa chỉ/khu vực. Chỉ hiển thị: Tên, địa chỉ, loại hình, mức nguy hiểm, trạng thái đáp ứng PCCC, ngày kiểm tra gần nhất. **Tuyệt đối ẩn:** SĐT/Email chủ cơ sở, chi tiết vi phạm, hồ sơ mật. |
 
 ---
@@ -65,4 +65,4 @@
 | **4. Lịch sử Vi phạm & Sự cố (12 tháng)** | **25 điểm** | Mỗi vi phạm nghiêm trọng: `+8đ`; Vi phạm thường: `+3đ`; Sự cố cháy nổ: `+10đ` (Cộng dồn tối đa `25đ`). |
 
 * **Ngưỡng phân loại tự động:** `0 – 34 điểm`: **Thấp (`LOW` - Xanh)** · `35 – 64 điểm`: **Trung bình (`MEDIUM` - Vàng)** · `65 – 100 điểm`: **Cao (`HIGH` - Đỏ)**.
-* *(Lưu ý: Cơ sở pháp lý đối chiếu theo Luật PCCC & CNCH 55/2024/QH15 và Nghị định 105/2025/NĐ-CP; bảng điểm là quy tắc cấu hình phục vụ demo và xác nhận với GTel OTS).*
+* *(Lưu ý: Cơ sở pháp lý đối chiếu theo **Luật PCCC & CNCH 55/2024/QH15**, **Nghị định 105/2025/NĐ-CP**, **Nghị định 106/2025/NĐ-CP**, **Nghị định 69/2026/NĐ-CP** và **Nghị định 347/2026/NĐ-CP** [thay thế NĐ 136/2020/NĐ-CP]; bảng điểm FR-03 và khung phạt tham chiếu là quy tắc cấu hình nội bộ phục vụ demo và xác nhận với GTel OTS).*
