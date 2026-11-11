@@ -149,7 +149,7 @@ Mỗi thành viên sao chép `backend-api/.env.example` thành `backend-api/.env
 
 ```env
 # Chuỗi kết nối Cloud PostgreSQL (Bắt buộc có ?sslmode=require)
-DATABASE_URL="postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres?sslmode=require"
+DATABASE_URL="postgresql://[USER]:[PASSWORD]@[ENDPOINT].neon.tech/neondb?sslmode=require"
 
 # Cổng khởi chạy Backend API
 PORT=3000

@@ -59,7 +59,7 @@ flowchart TB
     subgraph T4 ["TẦNG 4: HẠ TẦNG CLOUD & BẢO MẬT (PostgreSQL + PostGIS & S3 Storage)"]
         direction LR
         PG_DB[("☁️ Cloud PostgreSQL 16 + PostGIS<br/>Neon Serverless Postgres (14 Bảng CSDL dùng chung)")]
-        MINIO_S3[("📦 MinIO / S3 Cloud Storage<br/>Bucket: pccc-files (PDF & Ảnh <= 10MB)")]
+        MINIO_S3[("📦 MinIO / S3 Cloud Storage<br/>Bucket: pccc-documents (PDF & Ảnh <= 10MB)")]
     end
 
     %% ==================== LUỒNG KẾT NỐI ====================
@@ -196,7 +196,7 @@ sequenceDiagram
         
         INS->>FE5: Đánh giá từng mục (PASS / FAIL / NA) -> Tự lưu nháp vào localStorage
         FE5->>+BE4: POST /api/documents/upload (File JPG/PNG <= 10MB)
-        BE4->>+DB: Lưu vào MinIO bucket 'pccc-files'
+        BE4->>+DB: Lưu vào MinIO bucket 'pccc-documents'
         DB-->>-BE4: Trả về fileUrl
         BE4-->>-FE5: Gắn fileUrl vào mảng imageUrls của tiêu chí
     end
