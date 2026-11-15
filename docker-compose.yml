@@ -34,10 +34,13 @@ services:
     depends_on:
       - minio
     environment:
-      DATABASE_URL: postgresql://neondb_owner:npg_2uzDq5IARQgb@ep-winter-frost-aoqfeygz-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+      DATABASE_URL: ${DATABASE_URL}
       PORT: 3000
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
+      MINIO_USE_SSL: "false"
+      MINIO_ACCESS_KEY: minio_admin
+      MINIO_SECRET_KEY: password123
       MINIO_BUCKET_NAME: pccc-documents
 
 volumes:
