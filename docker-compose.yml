@@ -1,0 +1,44 @@
+services:
+  minio:
+    image: cgr.dev/chainguard/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minio_admin
+      MINIO_ROOT_PASSWORD: password123
+    volumes:
+      - minio_data:/data
+
+  createbuckets:
+    image: cgr.dev/chainguard/minio-client:latest-dev
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+        until mc alias set minio http://minio:9000 minio_admin password123; do
+          echo 'Waiting for MinIO to be ready...'
+          sleep 2
+        done
+        mc mb minio/pccc-documents || true
+        mc anonymous set none minio/pccc-documents
+      "
+
+  backend:
+    build:
+      context: ./backend-api
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - minio
+    environment:
+      DATABASE_URL: postgresql://neondb_owner:npg_2uzDq5IARQgb@ep-winter-frost-aoqfeygz-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+      PORT: 3000
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_BUCKET_NAME: pccc-documents
+
+volumes:
+  minio_data:
