@@ -163,7 +163,6 @@ export function ProvisionOwnerModal({
     phoneNumber: false,
     facilityId: false,
   });
-  const [hasSubmitted, setHasSubmitted] = useState(false);
 
   /** Cập nhật từng trường trong biểu mẫu cấp tài khoản OWNER. */
   const update = (field: keyof ProvisionOwnerPayload, value: string) => {
@@ -173,8 +172,6 @@ export function ProvisionOwnerModal({
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isSubmitting) return;
-    setHasSubmitted(true);
-
     const payload: ProvisionOwnerPayload = {
       email: form.email.trim(),
       fullName: form.fullName.trim(),
@@ -192,7 +189,7 @@ export function ProvisionOwnerModal({
   };
 
   const showFieldError = (field: keyof typeof touched) =>
-    touched[field] || hasSubmitted;
+    touched[field];
   const emailInvalid =
     form.email.trim().length > 0 &&
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
