@@ -1,6 +1,6 @@
 import type { RoleCode } from "../../types/pccc.types";
 
-/* Thông tin người dùng hiển thị trong hệ thống quản trị */
+/** Thông tin người dùng hiển thị trong hệ thống quản trị */
 export interface ManagedUser {
   id: string;
   email: string;
