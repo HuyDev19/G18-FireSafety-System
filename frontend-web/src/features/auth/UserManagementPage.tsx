@@ -131,10 +131,12 @@ function BrandMark() {
 }
 
 function formatDate(value?: string | null) {
-  if (!value) return "Chưa đăng nhập";
-  return new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium" }).format(
-    new Date(value),
-  );
+  if (!value || value.trim().length === 0) return "Chưa có dữ liệu";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Chưa có dữ liệu";
+
+  return new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium" }).format(date);
 }
 
 function getErrorMessage(error: unknown) {
@@ -809,7 +811,7 @@ export function UserManagementPage() {
                     <th className="table-heading px-5 py-3">Liên hệ</th>
                     <th className="table-heading px-5 py-3">Trạng thái</th>
                     <th className="table-heading px-5 py-3">
-                      Đăng nhập gần nhất
+                      Ngày tạo
                     </th>
                     <th className="table-heading px-5 py-3 text-right">
                       Thao tác
@@ -883,7 +885,7 @@ export function UserManagementPage() {
                           </span>
                         </td>
                         <td className="px-5 py-4 text-slate-600">
-                          {formatDate(user.lastLoginAt)}
+                          {formatDate(user.createdAt)}
                         </td>
                         <td className="px-5 py-4 text-right">
                           <div className="flex justify-end gap-1">
