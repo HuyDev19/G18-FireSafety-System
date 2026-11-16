@@ -475,6 +475,11 @@ export function ChangePasswordModal({
     form.currentPassword === form.newPassword;
   const newPasswordTooShort =
     form.newPassword.length > 0 && form.newPassword.length < 8;
+  const newPasswordHasUppercase = /[A-Z]/.test(form.newPassword);
+  const newPasswordHasNumber = /\d/.test(form.newPassword);
+  const newPasswordHasSpecialCharacter = /[\p{P}\p{S}]/u.test(
+    form.newPassword,
+  );
   const confirmPasswordTooShort =
     confirmPassword.length > 0 && confirmPassword.length < 8;
   const passwordsDoNotMatch =
@@ -484,6 +489,9 @@ export function ChangePasswordModal({
     newPasswordEmpty ||
     confirmPasswordEmpty ||
     newPasswordTooShort ||
+    !newPasswordHasUppercase ||
+    !newPasswordHasNumber ||
+    !newPasswordHasSpecialCharacter ||
     confirmPasswordTooShort ||
     reusesCurrentPassword ||
     passwordsDoNotMatch;
@@ -502,7 +510,7 @@ export function ChangePasswordModal({
   return (
     <ModalShell
       title="Đổi mật khẩu"
-      description="Sử dụng mật khẩu dài tối thiểu 8 ký tự và xác nhận lại mật khẩu mới."
+      description="Mật khẩu mới cần tối thiểu 8 ký tự, gồm chữ hoa, chữ số và ký tự đặc biệt."
       onClose={onClose}
       canClose={!isMandatory && !isSubmitting}
     >
@@ -556,6 +564,15 @@ export function ChangePasswordModal({
               : (touched.newPassword || form.newPassword.length > 0) &&
                   newPasswordTooShort
               ? "Mật khẩu mới phải có ít nhất 8 ký tự."
+              : (touched.newPassword || form.newPassword.length > 0) &&
+                  !newPasswordHasUppercase
+              ? "Mật khẩu mới phải có ít nhất 1 chữ hoa."
+              : (touched.newPassword || form.newPassword.length > 0) &&
+                  !newPasswordHasNumber
+              ? "Mật khẩu mới phải có ít nhất 1 chữ số."
+              : (touched.newPassword || form.newPassword.length > 0) &&
+                  !newPasswordHasSpecialCharacter
+              ? "Mật khẩu mới phải có ít nhất 1 ký tự đặc biệt."
               : (touched.newPassword || form.newPassword.length > 0) &&
                   reusesCurrentPassword
               ? "Mật khẩu mới phải khác mật khẩu hiện tại."
