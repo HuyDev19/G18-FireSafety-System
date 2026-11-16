@@ -121,7 +121,7 @@ function ModalShell({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+              className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-4 focus:ring-blue-100"
               aria-label="Đóng cửa sổ"
             >
               <X size={18} />
@@ -222,15 +222,22 @@ export function ProvisionOwnerModal({
           <label className="form-label block space-y-2">
             Họ và tên
             <input
+              id="owner-full-name"
               required
               value={form.fullName}
               onChange={(event) => update("fullName", event.target.value)}
               onBlur={() => markTouched("fullName")}
               placeholder="Nguyễn Văn An"
+              aria-invalid={showFieldError("fullName") && form.fullName.trim().length === 0}
+              aria-describedby={
+                showFieldError("fullName") && form.fullName.trim().length === 0
+                  ? "owner-full-name-error"
+                  : undefined
+              }
               className="field-control"
             />
             {showFieldError("fullName") && form.fullName.trim().length === 0 && (
-              <span className="caption-copy block font-medium text-red-600">
+              <span id="owner-full-name-error" role="alert" className="caption-copy block font-medium text-red-600">
                 Vui lòng nhập họ và tên hợp lệ.
               </span>
             )}
@@ -238,17 +245,28 @@ export function ProvisionOwnerModal({
           <label className="form-label block space-y-2">
             Email đăng nhập
             <input
+              id="owner-email"
               required
               type="email"
               value={form.email}
               onChange={(event) => update("email", event.target.value)}
               onBlur={() => markTouched("email")}
               placeholder="chucoso@doanhnghiep.vn"
+              aria-invalid={
+                showFieldError("email") &&
+                (form.email.trim().length === 0 || emailInvalid)
+              }
+              aria-describedby={
+                showFieldError("email") &&
+                (form.email.trim().length === 0 || emailInvalid)
+                  ? "owner-email-error"
+                  : undefined
+              }
               className="field-control"
             />
             {showFieldError("email") &&
               (form.email.trim().length === 0 || emailInvalid) && (
-                <span className="caption-copy block font-medium text-red-600">
+                <span id="owner-email-error" role="alert" className="caption-copy block font-medium text-red-600">
                   {form.email.trim().length === 0
                     ? "Vui lòng nhập email."
                     : "Vui lòng nhập email hợp lệ."}
@@ -258,17 +276,28 @@ export function ProvisionOwnerModal({
           <label className="form-label block space-y-2">
             Số điện thoại
             <input
+              id="owner-phone"
               required
               inputMode="tel"
               value={form.phoneNumber}
               onChange={(event) => update("phoneNumber", event.target.value)}
               onBlur={() => markTouched("phoneNumber")}
               placeholder="090 000 0000"
+              aria-invalid={
+                showFieldError("phoneNumber") &&
+                (form.phoneNumber.trim().length === 0 || phoneInvalid)
+              }
+              aria-describedby={
+                showFieldError("phoneNumber") &&
+                (form.phoneNumber.trim().length === 0 || phoneInvalid)
+                  ? "owner-phone-error"
+                  : undefined
+              }
               className="field-control"
             />
             {showFieldError("phoneNumber") &&
               (form.phoneNumber.trim().length === 0 || phoneInvalid) && (
-                <span className="caption-copy block font-medium text-red-600">
+                <span id="owner-phone-error" role="alert" className="caption-copy block font-medium text-red-600">
                   {form.phoneNumber.trim().length === 0
                     ? "Vui lòng nhập số điện thoại."
                     : "Số điện thoại phải có 10 chữ số và bắt đầu bằng 03, 05, 07, 08 hoặc 09."}
@@ -278,16 +307,27 @@ export function ProvisionOwnerModal({
           <label className="form-label block space-y-2">
             Mã cơ sở
             <input
+              id="owner-facility-id"
               required
               value={form.facilityId}
               onChange={(event) => update("facilityId", event.target.value)}
               onBlur={() => markTouched("facilityId")}
               placeholder="CS-HCM-0001"
+              aria-invalid={
+                showFieldError("facilityId") &&
+                form.facilityId.trim().length === 0
+              }
+              aria-describedby={
+                showFieldError("facilityId") &&
+                form.facilityId.trim().length === 0
+                  ? "owner-facility-id-error"
+                  : undefined
+              }
               className="field-control"
             />
             {showFieldError("facilityId") &&
               form.facilityId.trim().length === 0 && (
-                <span className="caption-copy block font-medium text-red-600">
+                <span id="owner-facility-id-error" role="alert" className="caption-copy block font-medium text-red-600">
                   Vui lòng nhập mã cơ sở hợp lệ.
                 </span>
               )}
@@ -300,7 +340,7 @@ export function ProvisionOwnerModal({
         </div>
 
         {error && (
-          <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p role="alert" className="body-copy rounded-lg bg-red-50 px-4 py-3 text-red-700">
             {error}
           </p>
         )}
