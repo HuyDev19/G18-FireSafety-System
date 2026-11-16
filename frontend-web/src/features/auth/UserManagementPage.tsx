@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   AlertCircle,
   Bell,
@@ -49,6 +49,20 @@ const roleLabels: Record<ManagedUser["role"], string> = {
   OWNER: "Chủ cơ sở",
 };
 
+const roleBadgeClasses: Record<ManagedUser["role"], string> = {
+  ADMIN: "bg-violet-50 text-violet-700",
+  LEADER: "bg-indigo-50 text-indigo-700",
+  INSPECTOR: "bg-cyan-50 text-cyan-700",
+  OWNER: "bg-amber-50 text-amber-700",
+};
+
+const managedUserRoles = new Set<ManagedUser["role"]>([
+  "ADMIN",
+  "LEADER",
+  "INSPECTOR",
+  "OWNER",
+]);
+
 const navItems = [
   { label: "Tổng quan", icon: LayoutDashboard, path: "/dashboard" },
   { label: "Bản đồ PCCC", icon: Map, path: "/map" },
@@ -71,7 +85,7 @@ function BrandMark() {
   );
 }
 
-function formatDate(value?: string) {
+function formatDate(value?: string | null) {
   if (!value) return "Chưa đăng nhập";
   return new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium" }).format(
     new Date(value),
@@ -87,11 +101,98 @@ function getErrorMessage(error: unknown) {
       "Không thể hoàn tất thao tác. Vui lòng thử lại."
     );
   }
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
   return "Không thể kết nối máy chủ. Vui lòng kiểm tra API và thử lại.";
+}
+
+function isApiEnvelope<T>(value: unknown): value is ApiEnvelope<T> {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.success === "boolean" &&
+    typeof candidate.message === "string" &&
+    "data" in candidate
+  );
+}
+
+function isApiErrorEnvelope(
+  value: unknown,
+): value is { success: false; message: string } {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return candidate.success === false && typeof candidate.message === "string";
+}
+
+function extractApiData<T>(response: unknown): T {
+  let envelope: ApiEnvelope<T> | null = null;
+
+  if (isApiErrorEnvelope(response)) {
+    throw new Error(response.message);
+  }
+
+  if (isApiEnvelope<T>(response)) {
+    envelope = response;
+  } else if (typeof response === "object" && response !== null) {
+    const candidate = response as { data?: unknown };
+    if (isApiErrorEnvelope(candidate.data)) {
+      throw new Error(candidate.data.message);
+    }
+    if (isApiEnvelope<T>(candidate.data)) {
+      envelope = candidate.data;
+    }
+  }
+
+  if (!envelope) {
+    throw new Error("Phản hồi API không đúng định dạng.");
+  }
+
+  if (!envelope.success) {
+    throw new Error(envelope.message || "API không thể trả về dữ liệu.");
+  }
+
+  return envelope.data;
+}
+
+function isManagedUser(value: unknown): value is ManagedUser {
+  if (typeof value !== "object" || value === null) return false;
+
+  const candidate = value as Record<string, unknown>;
+  const optionalStrings = [
+    "phone",
+    "areaCode",
+    "facilityId",
+    "lastLoginAt",
+    "createdAt",
+  ];
+
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.email === "string" &&
+    typeof candidate.fullName === "string" &&
+    typeof candidate.isActive === "boolean" &&
+    typeof candidate.role === "string" &&
+    managedUserRoles.has(candidate.role as ManagedUser["role"]) &&
+    optionalStrings.every(
+      (field) =>
+        candidate[field] === undefined ||
+        candidate[field] === null ||
+        typeof candidate[field] === "string",
+    ) &&
+    (candidate.mustChangePassword === undefined ||
+      candidate.mustChangePassword === null ||
+      typeof candidate.mustChangePassword === "boolean")
+  );
+}
+
+function isManagedUserList(value: unknown): value is ManagedUser[] {
+  return Array.isArray(value) && value.every(isManagedUser);
 }
 
 export function UserManagementPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const currentUser = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const [users, setUsers] = useState<ManagedUser[]>([]);
@@ -115,9 +216,13 @@ export function UserManagementPage() {
     setLoading(true);
     setError(null);
     try {
-      const response =
+      const response: unknown =
         await apiClient.get<ApiEnvelope<ManagedUser[]>>("/v1/users");
-      setUsers(response.data.data);
+      const usersData = extractApiData<unknown>(response);
+      if (!isManagedUserList(usersData)) {
+        throw new Error("Dữ liệu danh sách người dùng không đúng định dạng.");
+      }
+      setUsers(usersData);
     } catch (requestError) {
       setError(getErrorMessage(requestError));
     } finally {
@@ -298,9 +403,10 @@ export function UserManagementPage() {
               location.pathname.startsWith(`${path}/`);
 
             return (
-            <button
+              <button
                 key={label}
                 type="button"
+                onClick={() => navigate(path)}
                 className={`group/sidebar-item relative flex w-full items-center rounded-lg py-3 text-left text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-white/40 ${
                   sidebarCollapsed ? "justify-center px-2" : "gap-3 px-4"
                 } ${
@@ -667,7 +773,9 @@ export function UserManagementPage() {
                           </div>
                         </td>
                         <td className="px-5 py-4">
-                          <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                          <span
+                            className={`rounded-md px-2.5 py-1 text-xs font-semibold ${roleBadgeClasses[user.role]}`}
+                          >
                             {roleLabels[user.role]}
                           </span>
                         </td>

@@ -5,14 +5,14 @@ export interface ManagedUser {
   id: string;
   email: string;
   fullName: string;
-  phone?: string;
+  phone?: string | null;
   role: RoleCode;
-  areaCode?: string;
-  facilityId?: string;
+  areaCode?: string | null;
+  facilityId?: string | null;
   isActive: boolean;
-  mustChangePassword?: boolean;
-  lastLoginAt?: string;
-  createdAt?: string;
+  mustChangePassword?: boolean | null;
+  lastLoginAt?: string | null;
+  createdAt?: string | null;
 }
 
 /**
