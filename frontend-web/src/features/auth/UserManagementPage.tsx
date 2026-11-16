@@ -139,6 +139,10 @@ function formatDate(value?: string | null) {
   return new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium" }).format(date);
 }
 
+function normalizePhone(value: string) {
+  return value.replace(/\D/g, "");
+}
+
 function getErrorMessage(error: unknown) {
   if (typeof error === "object" && error !== null && "response" in error) {
     const response = (error as { response?: { data?: { message?: string } } })
@@ -302,11 +306,19 @@ export function UserManagementPage() {
 
   const filteredUsers = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
+    const isPhoneQuery =
+      /^\+?[\d\s().-]+$/.test(normalizedQuery) &&
+      /\d/.test(normalizedQuery);
+    const normalizedPhoneQuery = isPhoneQuery
+      ? normalizePhone(normalizedQuery)
+      : "";
     return users.filter((user) => {
       const matchesQuery =
         !normalizedQuery ||
         user.fullName.toLowerCase().includes(normalizedQuery) ||
-        user.email.toLowerCase().includes(normalizedQuery);
+        user.email.toLowerCase().includes(normalizedQuery) ||
+        (normalizedPhoneQuery.length > 0 &&
+          normalizePhone(user.phone ?? "").includes(normalizedPhoneQuery));
       const matchesRole = roleFilter === "ALL" || user.role === roleFilter;
       const matchesStatus =
         statusFilter === "ALL" ||
@@ -765,7 +777,7 @@ export function UserManagementPage() {
                     setQuery(event.target.value);
                     setCurrentPage(1);
                   }}
-                  placeholder="Tìm theo tên hoặc email..."
+                  placeholder="Tìm theo tên, email hoặc số điện thoại..."
                   className="field-control pl-10"
                   aria-label="Tìm người dùng"
                 />
