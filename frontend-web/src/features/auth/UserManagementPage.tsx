@@ -6,7 +6,9 @@ import {
   Building2,
   CalendarDays,
   CheckCircle2,
+  ChevronLeft,
   ChevronDown,
+  ChevronRight,
   Flame,
   KeyRound,
   LayoutDashboard,
@@ -41,6 +43,14 @@ import type {
 
 type UserFilter = "ALL" | "ADMIN" | "LEADER" | "INSPECTOR" | "OWNER";
 type StatusFilter = "ALL" | "ACTIVE" | "INACTIVE";
+type PaginationItem = number | "ellipsis";
+
+const USERS_PER_PAGE = 10;
+const paginationFixtureEnabled =
+  import.meta.env.DEV &&
+  import.meta.env.VITE_USER_MANAGEMENT_FIXTURE === "pagination-23";
+const paginationFixtureModulePath =
+  "./userManagement.pagination.fixture";
 
 const roleLabels: Record<ManagedUser["role"], string> = {
   ADMIN: "Quản trị viên",
@@ -76,6 +86,41 @@ const navItems = [
   },
   { label: "Quản trị User", icon: Users, path: "/admin/users" },
 ];
+
+function getPaginationItems(
+  currentPage: number,
+  totalPages: number,
+): PaginationItem[] {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  if (currentPage <= 4) {
+    return [1, 2, 3, 4, 5, "ellipsis", totalPages];
+  }
+
+  if (currentPage >= totalPages - 3) {
+    return [
+      1,
+      "ellipsis",
+      totalPages - 4,
+      totalPages - 3,
+      totalPages - 2,
+      totalPages - 1,
+      totalPages,
+    ];
+  }
+
+  return [
+    1,
+    "ellipsis",
+    currentPage - 1,
+    currentPage,
+    currentPage + 1,
+    "ellipsis",
+    totalPages,
+  ];
+}
 
 function BrandMark() {
   return (
@@ -207,6 +252,7 @@ export function UserManagementPage() {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const tableSearchRef = useRef<HTMLInputElement>(null);
   const headerSearchContainerRef = useRef<HTMLDivElement>(null);
   const [headerSearchOpen, setHeaderSearchOpen] = useState(false);
@@ -216,6 +262,15 @@ export function UserManagementPage() {
     setLoading(true);
     setError(null);
     try {
+      if (paginationFixtureEnabled) {
+        const fixtureModulePath = paginationFixtureModulePath;
+        const { paginationFixtureUsers } = await import(
+          /* @vite-ignore */ fixtureModulePath
+        );
+        setUsers(paginationFixtureUsers);
+        return;
+      }
+
       const response: unknown =
         await apiClient.get<ApiEnvelope<ManagedUser[]>>("/v1/users");
       const usersData = extractApiData<unknown>(response);
@@ -258,6 +313,36 @@ export function UserManagementPage() {
       return matchesQuery && matchesRole && matchesStatus;
     });
   }, [query, roleFilter, statusFilter, users]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredUsers.length / USERS_PER_PAGE),
+  );
+  const effectivePage = Math.min(
+    Math.max(currentPage, 1),
+    totalPages,
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [query, roleFilter, statusFilter]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(Math.max(page, 1), totalPages));
+  }, [totalPages]);
+
+  const paginatedUsers = useMemo(() => {
+    const startIndex = (effectivePage - 1) * USERS_PER_PAGE;
+    return filteredUsers.slice(startIndex, startIndex + USERS_PER_PAGE);
+  }, [effectivePage, filteredUsers]);
+
+  const displayStart =
+    filteredUsers.length === 0 ? 0 : (effectivePage - 1) * USERS_PER_PAGE + 1;
+  const displayEnd = Math.min(
+    effectivePage * USERS_PER_PAGE,
+    filteredUsers.length,
+  );
+  const paginationItems = getPaginationItems(effectivePage, totalPages);
 
   const activeCount = users.filter((user) => user.isActive).length;
   const inactiveCount = users.length - activeCount;
@@ -674,7 +759,10 @@ export function UserManagementPage() {
                 <input
                   ref={tableSearchRef}
                   value={query}
-                  onChange={(event) => setQuery(event.target.value)}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setCurrentPage(1);
+                  }}
                   placeholder="Tìm theo tên hoặc email..."
                   className="field-control pl-10"
                   aria-label="Tìm người dùng"
@@ -683,9 +771,10 @@ export function UserManagementPage() {
               <div className="flex flex-wrap gap-2">
                 <select
                   value={roleFilter}
-                  onChange={(event) =>
-                    setRoleFilter(event.target.value as UserFilter)
-                  }
+                  onChange={(event) => {
+                    setRoleFilter(event.target.value as UserFilter);
+                    setCurrentPage(1);
+                  }}
                   className="filter-control"
                   aria-label="Lọc theo vai trò"
                 >
@@ -697,9 +786,10 @@ export function UserManagementPage() {
                 </select>
                 <select
                   value={statusFilter}
-                  onChange={(event) =>
-                    setStatusFilter(event.target.value as StatusFilter)
-                  }
+                  onChange={(event) => {
+                    setStatusFilter(event.target.value as StatusFilter);
+                    setCurrentPage(1);
+                  }}
                   className="filter-control"
                   aria-label="Lọc theo trạng thái"
                 >
@@ -752,7 +842,7 @@ export function UserManagementPage() {
                     </tr>
                   )}
                   {!loading &&
-                    filteredUsers.map((user) => (
+                    paginatedUsers.map((user) => (
                       <tr
                         key={user.id}
                         className="transition hover:bg-blue-50/40"
@@ -838,13 +928,66 @@ export function UserManagementPage() {
                 </tbody>
               </table>
             </div>
-            <div className="flex items-center justify-between border-t border-slate-100 px-5 py-4 text-xs text-slate-500">
-              <span>
-                Hiển thị {filteredUsers.length} trên {users.length} người dùng
+            <div className="flex flex-col gap-4 border-t border-slate-100 px-5 py-4 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+              <span className="shrink-0">
+                Hiển thị {displayStart}–{displayEnd} trên tổng{" "}
+                {filteredUsers.length} người dùng
               </span>
-              <span className="font-medium">
-                Dữ liệu được phân quyền theo vai trò
-              </span>
+              {!loading && filteredUsers.length > 0 && (
+                <nav
+                  className="flex flex-wrap items-center justify-start gap-1 sm:justify-end"
+                  aria-label="Phân trang danh sách người dùng"
+                >
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(Math.max(effectivePage - 1, 1))}
+                  disabled={effectivePage === 1}
+                  className="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:bg-white disabled:hover:text-slate-600"
+                  aria-label="Trang trước"
+                >
+                  <ChevronLeft size={16} aria-hidden="true" />
+                </button>
+                {paginationItems.map((item, index) =>
+                  item === "ellipsis" ? (
+                    <span
+                      key={`ellipsis-${index}`}
+                      className="inline-flex h-9 min-w-9 items-center justify-center px-1 text-slate-400"
+                      aria-hidden="true"
+                    >
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => setCurrentPage(item)}
+                      className={`inline-flex h-9 min-w-9 items-center justify-center rounded-lg border px-2 font-semibold transition focus:outline-none focus:ring-4 focus:ring-blue-100 ${
+                        item === effectivePage
+                          ? "border-[#0d3b6e] bg-[#0d3b6e] text-white"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                      }`}
+                      aria-label={`Trang ${item}`}
+                      aria-current={
+                        item === effectivePage ? "page" : undefined
+                      }
+                    >
+                      {item}
+                    </button>
+                  ),
+                )}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCurrentPage(Math.min(effectivePage + 1, totalPages))
+                  }
+                  disabled={effectivePage === totalPages}
+                  className="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-slate-600 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:bg-white disabled:hover:text-slate-600"
+                  aria-label="Trang sau"
+                >
+                  <ChevronRight size={16} aria-hidden="true" />
+                </button>
+                </nav>
+              )}
             </div>
           </div>
         </section>
