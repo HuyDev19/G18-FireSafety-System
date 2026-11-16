@@ -112,10 +112,10 @@ function ModalShell({
       >
         <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
           <div>
-            <h2 id={titleId} className="text-lg font-bold text-slate-950">
+            <h2 id={titleId} className="text-lg font-bold leading-7 text-slate-950">
               {title}
             </h2>
-            <p className="mt-1 text-sm text-slate-500">{description}</p>
+            <p className="body-copy mt-1 text-slate-500">{description}</p>
           </div>
           {canClose && (
             <button
@@ -219,7 +219,7 @@ export function ProvisionOwnerModal({
         className="space-y-5 px-6 py-6"
       >
         <div className="grid gap-4 sm:grid-cols-2">
-          <label className="space-y-2 text-sm font-semibold text-slate-700">
+          <label className="form-label block space-y-2">
             Họ và tên
             <input
               required
@@ -230,12 +230,12 @@ export function ProvisionOwnerModal({
               className="field-control"
             />
             {showFieldError("fullName") && form.fullName.trim().length === 0 && (
-              <span className="block text-xs font-medium text-red-600">
+              <span className="caption-copy block font-medium text-red-600">
                 Vui lòng nhập họ và tên hợp lệ.
               </span>
             )}
           </label>
-          <label className="space-y-2 text-sm font-semibold text-slate-700">
+          <label className="form-label block space-y-2">
             Email đăng nhập
             <input
               required
@@ -248,14 +248,14 @@ export function ProvisionOwnerModal({
             />
             {showFieldError("email") &&
               (form.email.trim().length === 0 || emailInvalid) && (
-                <span className="block text-xs font-medium text-red-600">
+                <span className="caption-copy block font-medium text-red-600">
                   {form.email.trim().length === 0
                     ? "Vui lòng nhập email."
                     : "Vui lòng nhập email hợp lệ."}
                 </span>
               )}
           </label>
-          <label className="space-y-2 text-sm font-semibold text-slate-700">
+          <label className="form-label block space-y-2">
             Số điện thoại
             <input
               required
@@ -268,14 +268,14 @@ export function ProvisionOwnerModal({
             />
             {showFieldError("phoneNumber") &&
               (form.phoneNumber.trim().length === 0 || phoneInvalid) && (
-                <span className="block text-xs font-medium text-red-600">
+                <span className="caption-copy block font-medium text-red-600">
                   {form.phoneNumber.trim().length === 0
                     ? "Vui lòng nhập số điện thoại."
                     : "Số điện thoại phải có 10 chữ số và bắt đầu bằng 03, 05, 07, 08 hoặc 09."}
                 </span>
               )}
           </label>
-          <label className="space-y-2 text-sm font-semibold text-slate-700">
+          <label className="form-label block space-y-2">
             Mã cơ sở
             <input
               required
@@ -287,14 +287,14 @@ export function ProvisionOwnerModal({
             />
             {showFieldError("facilityId") &&
               form.facilityId.trim().length === 0 && (
-                <span className="block text-xs font-medium text-red-600">
+                <span className="caption-copy block font-medium text-red-600">
                   Vui lòng nhập mã cơ sở hợp lệ.
                 </span>
               )}
           </label>
         </div>
 
-        <div className="rounded-xl bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-800">
+        <div className="body-copy rounded-xl bg-blue-50 px-4 py-3 text-blue-800">
           Mật khẩu tạm thời sẽ được sinh tự động. Chủ cơ sở bắt buộc đổi mật
           khẩu ở lần đăng nhập đầu tiên.
         </div>
@@ -362,7 +362,7 @@ function PasswordField({
   error,
 }: PasswordFieldProps) {
   return (
-    <label className="block space-y-2 text-sm font-semibold text-slate-700">
+    <label className="form-label block space-y-2">
       {label}
       <span className="relative block">
         <input
@@ -393,7 +393,7 @@ function PasswordField({
         </button>
       </span>
       {error && (
-        <span id={`${id}-error`} role="alert" className="block text-xs font-medium text-red-600">
+        <span id={`${id}-error`} role="alert" className="caption-copy block font-medium text-red-600">
           {error}
         </span>
       )}
@@ -551,12 +551,12 @@ export function ChangePasswordModal({
         />
 
         {error && (
-          <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p role="alert" className="body-copy rounded-lg bg-red-50 px-4 py-3 text-red-700">
             {error}
           </p>
         )}
         {isFormInvalid && !isSubmitting && (
-          <p className="text-xs text-slate-500">
+          <p className="caption-copy text-slate-500">
             Nhập đủ thông tin và đáp ứng các điều kiện để lưu mật khẩu.
           </p>
         )}
