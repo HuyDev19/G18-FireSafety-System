@@ -245,6 +245,7 @@ export function UserManagementPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const currentUser = useAuthStore((state) => state.user);
+  const updateUser = useAuthStore((state) => state.updateUser);
   const logout = useAuthStore((state) => state.logout);
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [query, setQuery] = useState("");
@@ -255,7 +256,9 @@ export function UserManagementPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [provisionOpen, setProvisionOpen] = useState(false);
-  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(
+    () => currentUser?.mustChangePassword === true,
+  );
   const [modalError, setModalError] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -265,6 +268,8 @@ export function UserManagementPage() {
   const toastSequenceRef = useRef(0);
   const [headerSearchOpen, setHeaderSearchOpen] = useState(false);
   const [headerQuery, setHeaderQuery] = useState("");
+  const isMandatoryPasswordChange =
+    currentUser?.mustChangePassword === true;
 
   const dismissSuccessToast = () => {
     toastSequenceRef.current += 1;
@@ -319,6 +324,13 @@ export function UserManagementPage() {
   useEffect(() => {
     void loadUsers();
   }, []);
+
+  useEffect(() => {
+    if (isMandatoryPasswordChange) {
+      setModalError(null);
+      setPasswordOpen(true);
+    }
+  }, [isMandatoryPasswordChange]);
 
   useEffect(() => {
     const previousTitle = document.title;
@@ -426,6 +438,9 @@ export function UserManagementPage() {
         payload,
       );
       extractApiData<unknown>(response);
+      if (isMandatoryPasswordChange) {
+        updateUser({ mustChangePassword: false });
+      }
       setPasswordOpen(false);
       showSuccessToast("Mật khẩu đã được cập nhật.");
     } catch (requestError) {
@@ -1083,7 +1098,12 @@ export function UserManagementPage() {
         <ChangePasswordModal
           isSubmitting={actionId === "password"}
           error={modalError}
-          onClose={() => setPasswordOpen(false)}
+          isMandatory={isMandatoryPasswordChange}
+          onClose={() => {
+            if (!isMandatoryPasswordChange) {
+              setPasswordOpen(false);
+            }
+          }}
           onSubmit={changePassword}
         />
       )}
