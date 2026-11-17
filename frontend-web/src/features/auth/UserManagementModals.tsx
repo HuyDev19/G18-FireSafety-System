@@ -304,6 +304,9 @@ export function ProvisionOwnerModal({
     showFieldError("facilityId") &&
     facilitySourceState === "ready" &&
     !facilitySelectionReady;
+  const fullNameInvalid =
+    form.fullName.trim().length === 0 ||
+    !/[\p{L}]/u.test(form.fullName);
   const emailInvalid =
     form.email.trim().length > 0 &&
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
@@ -313,7 +316,7 @@ export function ProvisionOwnerModal({
     form.phoneNumber.trim().length > 0 &&
     !/^(03|05|07|08|09)\d{8}$/.test(normalizedPhone);
   const provisionInvalid =
-    form.fullName.trim().length === 0 ||
+    fullNameInvalid ||
     form.email.trim().length === 0 ||
     emailInvalid ||
     form.phoneNumber.trim().length === 0 ||
@@ -361,17 +364,17 @@ export function ProvisionOwnerModal({
               onChange={(event) => update("fullName", event.target.value)}
               onBlur={() => markTouched("fullName")}
               placeholder="Nguyễn Văn An"
-              aria-invalid={showFieldError("fullName") && form.fullName.trim().length === 0}
+              aria-invalid={showFieldError("fullName") && fullNameInvalid}
               aria-describedby={
-                showFieldError("fullName") && form.fullName.trim().length === 0
+                showFieldError("fullName") && fullNameInvalid
                   ? "owner-full-name-error"
                   : undefined
               }
               className="field-control"
             />
-            {showFieldError("fullName") && form.fullName.trim().length === 0 && (
+            {showFieldError("fullName") && fullNameInvalid && (
               <span id="owner-full-name-error" role="alert" className="caption-copy block font-medium text-red-600">
-                Vui lòng nhập họ và tên hợp lệ.
+                Vui lòng nhập họ và tên có ít nhất một chữ cái.
               </span>
             )}
           </label>
@@ -406,8 +409,8 @@ export function ProvisionOwnerModal({
                 </span>
               )}
           </label>
-          <label className="form-label block space-y-2">
-            Số điện thoại
+          <label className="form-label block">
+            <span className="block">Số điện thoại</span>
             <input
               id="owner-phone"
               required
@@ -426,22 +429,24 @@ export function ProvisionOwnerModal({
                   ? "owner-phone-error"
                   : undefined
               }
-              className="field-control"
+              className="field-control mt-2"
             />
             {showFieldError("phoneNumber") &&
               (form.phoneNumber.trim().length === 0 || phoneInvalid) && (
-                <span id="owner-phone-error" role="alert" className="caption-copy block font-medium text-red-600">
+                <span id="owner-phone-error" role="alert" className="caption-copy mt-2 block font-medium text-red-600">
                   {form.phoneNumber.trim().length === 0
                     ? "Vui lòng nhập số điện thoại."
                     : "Số điện thoại phải có 10 chữ số và bắt đầu bằng 03, 05, 07, 08 hoặc 09."}
                 </span>
               )}
           </label>
-          <div className="form-label space-y-2">
-            <label htmlFor="owner-facility-id">Cơ sở cấp tài khoản</label>
+          <div className="form-label">
+            <label htmlFor="owner-facility-id" className="block">
+              Cơ sở cấp tài khoản
+            </label>
             <div
               ref={facilityComboboxRef}
-              className="relative"
+              className="relative mt-2"
               onBlur={(event) => {
                 markTouched("facilityId");
                 if (
@@ -557,7 +562,7 @@ export function ProvisionOwnerModal({
               <span
                 id={facilityStatusId}
                 role={facilitySourceState === "error" ? "alert" : "status"}
-                className={`caption-copy block ${
+                className={`caption-copy mt-2 block ${
                   facilitySourceState === "error"
                     ? "font-medium text-red-600"
                     : "text-slate-500"
@@ -567,7 +572,7 @@ export function ProvisionOwnerModal({
               </span>
             )}
             {facilityValidationError && (
-              <span id="owner-facility-id-error" role="alert" className="caption-copy block font-medium text-red-600">
+              <span id="owner-facility-id-error" role="alert" className="caption-copy mt-2 block font-medium text-red-600">
                 Vui lòng chọn một cơ sở từ danh sách.
               </span>
             )}
