@@ -261,8 +261,33 @@ export function UserManagementPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const tableSearchRef = useRef<HTMLInputElement>(null);
   const headerSearchContainerRef = useRef<HTMLDivElement>(null);
+  const toastTimerRef = useRef<number | null>(null);
+  const toastSequenceRef = useRef(0);
   const [headerSearchOpen, setHeaderSearchOpen] = useState(false);
   const [headerQuery, setHeaderQuery] = useState("");
+
+  const dismissSuccessToast = () => {
+    toastSequenceRef.current += 1;
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    setNotice(null);
+  };
+
+  const showSuccessToast = (message: string) => {
+    const toastSequence = toastSequenceRef.current + 1;
+    toastSequenceRef.current = toastSequence;
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    setNotice(message);
+    toastTimerRef.current = window.setTimeout(() => {
+      if (toastSequenceRef.current !== toastSequence) return;
+      setNotice(null);
+      toastTimerRef.current = null;
+    }, 5000);
+  };
 
   const loadUsers = async () => {
     setLoading(true);
@@ -301,6 +326,14 @@ export function UserManagementPage() {
 
     return () => {
       document.title = previousTitle;
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current !== null) {
+        window.clearTimeout(toastTimerRef.current);
+      }
     };
   }, []);
 
@@ -362,15 +395,18 @@ export function UserManagementPage() {
   const inactiveCount = users.length - activeCount;
 
   const provisionOwner = async (payload: ProvisionOwnerPayload) => {
+    dismissSuccessToast();
     setModalError(null);
+    setError(null);
     setActionId("provision");
     try {
-      await apiClient.post<ApiEnvelope<ManagedUser>>(
+      const response: unknown = await apiClient.post<ApiEnvelope<ManagedUser>>(
         "/users/provision-owner",
         payload,
       );
+      extractApiData<unknown>(response);
       setProvisionOpen(false);
-      setNotice("Đã cấp tài khoản chủ cơ sở thành công.");
+      showSuccessToast("Đã cấp tài khoản chủ cơ sở thành công.");
       await loadUsers();
     } catch (requestError) {
       setModalError(getErrorMessage(requestError));
@@ -380,15 +416,18 @@ export function UserManagementPage() {
   };
 
   const changePassword = async (payload: ChangePasswordPayload) => {
+    dismissSuccessToast();
     setModalError(null);
+    setError(null);
     setActionId("password");
     try {
-      await apiClient.patch<ApiEnvelope<null>>(
+      const response: unknown = await apiClient.patch<ApiEnvelope<null>>(
         "/auth/change-password",
         payload,
       );
+      extractApiData<unknown>(response);
       setPasswordOpen(false);
-      setNotice("Mật khẩu đã được cập nhật.");
+      showSuccessToast("Mật khẩu đã được cập nhật.");
     } catch (requestError) {
       setModalError(getErrorMessage(requestError));
     } finally {
@@ -404,20 +443,22 @@ export function UserManagementPage() {
       )
     )
       return;
+    dismissSuccessToast();
     setActionId(user.id);
     setError(null);
     try {
       const payload: StatusPayload = { isActive: !user.isActive };
-      await apiClient.patch<ApiEnvelope<ManagedUser>>(
+      const response: unknown = await apiClient.patch<ApiEnvelope<ManagedUser>>(
         `/users/${user.id}/status`,
         payload,
       );
+      extractApiData<unknown>(response);
       setUsers((current) =>
         current.map((item) =>
           item.id === user.id ? { ...item, isActive: payload.isActive } : item,
         ),
       );
-      setNotice(
+      showSuccessToast(
         payload.isActive ? "Đã kích hoạt tài khoản." : "Đã khóa tài khoản.",
       );
     } catch (requestError) {
@@ -434,13 +475,15 @@ export function UserManagementPage() {
       )
     )
       return;
+    dismissSuccessToast();
     setActionId(user.id);
     setError(null);
     try {
-      await apiClient.post<ApiEnvelope<ManagedUser>>(
+      const response: unknown = await apiClient.post<ApiEnvelope<ManagedUser>>(
         `/users/${user.id}/reset-password`,
       );
-      setNotice(`Đã reset mật khẩu cho ${user.fullName}.`);
+      extractApiData<unknown>(response);
+      showSuccessToast(`Đã reset mật khẩu cho ${user.fullName}.`);
     } catch (requestError) {
       setError(getErrorMessage(requestError));
     } finally {
@@ -608,7 +651,7 @@ export function UserManagementPage() {
                         ? "Tìm kiếm toàn hệ thống chưa được kết nối API."
                         : "Vui lòng nhập từ khóa tìm kiếm.",
                     );
-                    setNotice(null);
+                    dismissSuccessToast();
                   }}
                 >
                   <input
@@ -733,26 +776,19 @@ export function UserManagementPage() {
             ))}
           </div>
 
-          {(error || notice) && (
+          {error && (
             <div
-              className={`mb-5 flex items-start justify-between gap-4 rounded-xl px-4 py-3 text-sm ${error ? "bg-red-50 text-red-800" : "bg-emerald-50 text-emerald-800"}`}
-              role="status"
+              className="mb-5 flex items-start justify-between gap-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800"
+              role="alert"
             >
               <div className="flex items-start gap-2">
-                {error ? (
-                  <AlertCircle size={18} className="mt-0.5 shrink-0" />
-                ) : (
-                  <CheckCircle2 size={18} className="mt-0.5 shrink-0" />
-                )}
-                <span>{error ?? notice}</span>
+                <AlertCircle size={18} className="mt-0.5 shrink-0" />
+                <span>{error}</span>
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setError(null);
-                  setNotice(null);
-                }}
-                aria-label="Đóng thông báo"
+                onClick={() => setError(null)}
+                aria-label="Đóng thông báo lỗi"
               >
                 <X size={16} />
               </button>
@@ -1006,6 +1042,34 @@ export function UserManagementPage() {
           </div>
         </section>
       </main>
+
+      {notice && (
+        <div
+          className="fixed right-4 top-4 z-[60] flex w-[calc(100%-2rem)] max-w-sm items-start gap-3 rounded-xl border border-emerald-200 bg-white p-4 text-emerald-900 shadow-xl"
+          role="status"
+          aria-live="polite"
+        >
+          <CheckCircle2
+            size={20}
+            className="mt-0.5 shrink-0 text-emerald-600"
+            aria-hidden="true"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold">Thao tác thành công</p>
+            <p className="mt-1 text-sm leading-5 text-emerald-800">
+              {notice}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={dismissSuccessToast}
+            className="shrink-0 rounded-md p-1 text-emerald-700 transition hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            aria-label="Đóng thông báo thành công"
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
+      )}
 
       {provisionOpen && (
         <ProvisionOwnerModal
