@@ -1,9 +1,10 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type {
   FormEvent,
+  KeyboardEvent,
   ReactNode,
 } from "react";
-import { Eye, EyeOff, Loader2, X } from "lucide-react";
+import { ChevronDown, Eye, EyeOff, Loader2, X } from "lucide-react";
 import type {
   ChangePasswordPayload,
   ProvisionOwnerPayload,
@@ -134,12 +135,33 @@ function ModalShell({
   );
 }
 
+interface ProvisionOwnerFormState {
+  email: string;
+  fullName: string;
+  phoneNumber: string;
+  facilityId: string;
+}
+
 interface ProvisionOwnerModalProps {
   isSubmitting: boolean;
   error: string | null;
   onClose: () => void;
   onSubmit: (payload: ProvisionOwnerPayload) => Promise<void>;
+  facilityOptions?: readonly FacilityOption[];
+  facilitySourceState?: FacilitySourceState;
+  facilitySourceError?: string | null;
 }
+
+export interface FacilityOption {
+  id: string;
+  name: string;
+  address?: string | null;
+  code?: string | null;
+}
+
+export type FacilitySourceState = "unavailable" | "loading" | "ready" | "error";
+
+const defaultFacilityOptions: readonly FacilityOption[] = [];
 
 /**
  * Modal cấp tài khoản OWNER cho chủ cơ sở PCCC.
@@ -150,8 +172,11 @@ export function ProvisionOwnerModal({
   error,
   onClose,
   onSubmit,
+  facilityOptions = defaultFacilityOptions,
+  facilitySourceState = "unavailable",
+  facilitySourceError = null,
 }: ProvisionOwnerModalProps) {
-  const [form, setForm] = useState<ProvisionOwnerPayload>({
+  const [form, setForm] = useState<ProvisionOwnerFormState>({
     email: "",
     fullName: "",
     phoneNumber: "",
@@ -163,10 +188,95 @@ export function ProvisionOwnerModal({
     phoneNumber: false,
     facilityId: false,
   });
+  const [facilityQuery, setFacilityQuery] = useState("");
+  const [facilityOpen, setFacilityOpen] = useState(false);
+  const [activeFacilityIndex, setActiveFacilityIndex] = useState(-1);
+  const facilityComboboxRef = useRef<HTMLDivElement>(null);
+  const facilityInputRef = useRef<HTMLInputElement>(null);
+  const facilityListboxId = useId();
 
   /** Cập nhật từng trường trong biểu mẫu cấp tài khoản OWNER. */
-  const update = (field: keyof ProvisionOwnerPayload, value: string) => {
+  const update = (field: keyof ProvisionOwnerFormState, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const selectedFacility = facilityOptions.find(
+    (facility) => facility.id === form.facilityId,
+  );
+  const normalizedFacilityQuery = facilityQuery.trim().toLowerCase();
+  const filteredFacilities = useMemo(
+    () =>
+      facilityOptions.filter((facility) => {
+        if (!normalizedFacilityQuery) return true;
+        return [facility.name, facility.address, facility.code]
+          .filter((value): value is string => Boolean(value))
+          .some((value) =>
+            value.toLowerCase().includes(normalizedFacilityQuery),
+          );
+      }),
+    [facilityOptions, normalizedFacilityQuery],
+  );
+  const facilitySelectionReady =
+    facilitySourceState === "ready" && Boolean(selectedFacility);
+  const facilitySelectionEnabled =
+    facilitySourceState === "ready" && facilityOptions.length > 0;
+  const facilityListboxVisible =
+    facilityOpen && facilitySelectionEnabled && filteredFacilities.length > 0;
+
+  const updateFacilityQuery = (value: string) => {
+    setFacilityQuery(value);
+    setFacilityOpen(true);
+    setActiveFacilityIndex(0);
+    if (form.facilityId) {
+      update("facilityId", "");
+    }
+  };
+
+  const selectFacility = (facility: FacilityOption) => {
+    update("facilityId", facility.id);
+    setFacilityQuery(facility.name);
+    setFacilityOpen(false);
+    setActiveFacilityIndex(-1);
+    markTouched("facilityId");
+  };
+
+  const resetFacilityQueryToSelection = () => {
+    setFacilityQuery(selectedFacility?.name ?? "");
+    setFacilityOpen(false);
+    setActiveFacilityIndex(-1);
+  };
+
+  const handleFacilityKeyDown = (
+    event: KeyboardEvent<HTMLInputElement>,
+  ) => {
+    if (event.key === "Escape" && facilityOpen) {
+      event.preventDefault();
+      event.stopPropagation();
+      resetFacilityQueryToSelection();
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setFacilityOpen(true);
+      setActiveFacilityIndex((index) =>
+        Math.min(index + 1, filteredFacilities.length - 1),
+      );
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setFacilityOpen(true);
+      setActiveFacilityIndex((index) => Math.max(index - 1, 0));
+      return;
+    }
+
+    if (event.key === "Enter" && facilityOpen) {
+      event.preventDefault();
+      const activeFacility = filteredFacilities[activeFacilityIndex];
+      if (activeFacility) selectFacility(activeFacility);
+    }
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -175,9 +285,9 @@ export function ProvisionOwnerModal({
     const payload: ProvisionOwnerPayload = {
       email: form.email.trim(),
       fullName: form.fullName.trim(),
-        // API nhận số điện thoại dạng 10 chữ số liên tiếp sau khi chuẩn hóa.
-      phoneNumber: normalizedPhone,
-      facilityId: form.facilityId.trim(),
+      // API nhận số điện thoại dạng 10 chữ số liên tiếp sau khi chuẩn hóa.
+      phone: normalizedPhone,
+      facilityId: selectedFacility?.id ?? "",
     };
     if (provisionInvalid) return;
 
@@ -190,6 +300,10 @@ export function ProvisionOwnerModal({
 
   const showFieldError = (field: keyof typeof touched) =>
     touched[field];
+  const facilityValidationError =
+    showFieldError("facilityId") &&
+    facilitySourceState === "ready" &&
+    !facilitySelectionReady;
   const emailInvalid =
     form.email.trim().length > 0 &&
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
@@ -204,7 +318,26 @@ export function ProvisionOwnerModal({
     emailInvalid ||
     form.phoneNumber.trim().length === 0 ||
     phoneInvalid ||
-    form.facilityId.trim().length === 0;
+    !facilitySelectionReady;
+  const facilityStatusMessage =
+    facilitySourceState === "loading"
+      ? "Đang tải danh sách cơ sở đủ điều kiện..."
+      : facilitySourceState === "error"
+        ? facilitySourceError ?? "Không thể tải danh sách cơ sở."
+        : facilitySourceState === "unavailable"
+          ? "Chưa có API danh sách cơ sở đủ điều kiện. Chưa thể cấp tài khoản."
+          : facilityOptions.length === 0
+            ? "Chưa có cơ sở đủ điều kiện để cấp tài khoản."
+            : filteredFacilities.length === 0
+              ? "Không tìm thấy cơ sở phù hợp."
+              : null;
+  const facilityStatusId = "owner-facility-status";
+  const facilityDescriptionIds = [
+    facilityStatusMessage ? facilityStatusId : null,
+    facilityValidationError ? "owner-facility-id-error" : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <ModalShell
@@ -304,34 +437,141 @@ export function ProvisionOwnerModal({
                 </span>
               )}
           </label>
-          <label className="form-label block space-y-2">
-            Mã cơ sở
-            <input
-              id="owner-facility-id"
-              required
-              value={form.facilityId}
-              onChange={(event) => update("facilityId", event.target.value)}
-              onBlur={() => markTouched("facilityId")}
-              placeholder="CS-HCM-0001"
-              aria-invalid={
-                showFieldError("facilityId") &&
-                form.facilityId.trim().length === 0
-              }
-              aria-describedby={
-                showFieldError("facilityId") &&
-                form.facilityId.trim().length === 0
-                  ? "owner-facility-id-error"
-                  : undefined
-              }
-              className="field-control"
-            />
-            {showFieldError("facilityId") &&
-              form.facilityId.trim().length === 0 && (
-                <span id="owner-facility-id-error" role="alert" className="caption-copy block font-medium text-red-600">
-                  Vui lòng nhập mã cơ sở hợp lệ.
-                </span>
+          <div className="form-label space-y-2">
+            <label htmlFor="owner-facility-id">Cơ sở cấp tài khoản</label>
+            <div
+              ref={facilityComboboxRef}
+              className="relative"
+              onBlur={(event) => {
+                markTouched("facilityId");
+                if (
+                  !facilityComboboxRef.current?.contains(
+                    event.relatedTarget as Node | null,
+                  )
+                ) {
+                  resetFacilityQueryToSelection();
+                }
+              }}
+            >
+              <div className="relative">
+                <input
+                  ref={facilityInputRef}
+                  id="owner-facility-id"
+                  required
+                  disabled={!facilitySelectionEnabled}
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-controls={
+                    facilityListboxVisible ? facilityListboxId : undefined
+                  }
+                  aria-expanded={facilityListboxVisible}
+                  aria-activedescendant={
+                    facilityListboxVisible &&
+                    activeFacilityIndex >= 0 &&
+                    filteredFacilities[activeFacilityIndex]
+                      ? `${facilityListboxId}-option-${activeFacilityIndex}`
+                      : undefined
+                  }
+                  value={facilityQuery}
+                  onFocus={() => {
+                    setFacilityOpen(true);
+                    setActiveFacilityIndex(
+                      filteredFacilities.length > 0 ? 0 : -1,
+                    );
+                  }}
+                  onChange={(event) => updateFacilityQuery(event.target.value)}
+                  onKeyDown={handleFacilityKeyDown}
+                  placeholder="Tìm theo tên hoặc mã cơ sở..."
+                  aria-invalid={facilityValidationError}
+                  aria-describedby={
+                    facilityDescriptionIds || undefined
+                  }
+                  className="field-control pr-11"
+                />
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  disabled={!facilitySelectionEnabled}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    setFacilityOpen((open) => !open);
+                    setActiveFacilityIndex(
+                      filteredFacilities.length > 0 ? 0 : -1,
+                    );
+                    facilityInputRef.current?.focus();
+                  }}
+                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  aria-label={
+                    facilityOpen
+                      ? "Đóng danh sách cơ sở"
+                      : "Mở danh sách cơ sở"
+                  }
+                  aria-expanded={facilityListboxVisible}
+                  aria-controls={
+                    facilityListboxVisible ? facilityListboxId : undefined
+                  }
+                >
+                  <ChevronDown
+                    size={17}
+                    className={facilityOpen ? "rotate-180 transition" : "transition"}
+                    aria-hidden="true"
+                  />
+                </button>
+              </div>
+              {facilityListboxVisible && (
+                  <ul
+                    id={facilityListboxId}
+                    role="listbox"
+                    className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                  >
+                    {filteredFacilities.map((facility, index) => (
+                      <li
+                        key={facility.id}
+                        id={`${facilityListboxId}-option-${index}`}
+                        role="option"
+                        aria-selected={facility.id === form.facilityId}
+                        className={`cursor-pointer px-3 py-2.5 text-sm ${
+                          index === activeFacilityIndex
+                            ? "bg-blue-50 text-blue-800"
+                            : "text-slate-700 hover:bg-slate-50"
+                        }`}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => selectFacility(facility)}
+                      >
+                        <span className="block font-semibold">
+                          {facility.name}
+                        </span>
+                        {(facility.code || facility.address) && (
+                          <span className="caption-copy mt-0.5 block text-slate-500">
+                            {[facility.code, facility.address]
+                              .filter(Boolean)
+                              .join(" • ")}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
               )}
-          </label>
+            </div>
+            {facilityStatusMessage && (
+              <span
+                id={facilityStatusId}
+                role={facilitySourceState === "error" ? "alert" : "status"}
+                className={`caption-copy block ${
+                  facilitySourceState === "error"
+                    ? "font-medium text-red-600"
+                    : "text-slate-500"
+                }`}
+              >
+                {facilityStatusMessage}
+              </span>
+            )}
+            {facilityValidationError && (
+              <span id="owner-facility-id-error" role="alert" className="caption-copy block font-medium text-red-600">
+                Vui lòng chọn một cơ sở từ danh sách.
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="body-copy rounded-xl bg-blue-50 px-4 py-3 text-blue-800">
@@ -453,7 +693,7 @@ export function ChangePasswordModal({
   onSubmit,
 }: ChangePasswordModalProps) {
   const [form, setForm] = useState<ChangePasswordPayload>({
-    currentPassword: "",
+    oldPassword: "",
     newPassword: "",
   });
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -467,12 +707,12 @@ export function ChangePasswordModal({
     newPassword: false,
     confirmPassword: false,
   });
-  const currentPasswordEmpty = form.currentPassword.length === 0;
+  const currentPasswordEmpty = form.oldPassword.length === 0;
   const newPasswordEmpty = form.newPassword.length === 0;
   const confirmPasswordEmpty = confirmPassword.length === 0;
   const reusesCurrentPassword =
-    form.currentPassword.length > 0 &&
-    form.currentPassword === form.newPassword;
+    form.oldPassword.length > 0 &&
+    form.oldPassword === form.newPassword;
   const newPasswordTooShort =
     form.newPassword.length > 0 && form.newPassword.length < 8;
   const newPasswordHasUppercase = /[A-Z]/.test(form.newPassword);
@@ -522,11 +762,11 @@ export function ChangePasswordModal({
         <PasswordField
           id="current-password"
           label="Mật khẩu hiện tại"
-          value={form.currentPassword}
+          value={form.oldPassword}
           visible={visibleFields.currentPassword}
           autoComplete="current-password"
           onChange={(value) =>
-            setForm((current) => ({ ...current, currentPassword: value }))
+            setForm((current) => ({ ...current, oldPassword: value }))
           }
           onToggleVisibility={() =>
             setVisibleFields((current) => ({

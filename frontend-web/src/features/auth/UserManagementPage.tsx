@@ -278,7 +278,7 @@ export function UserManagementPage() {
       }
 
       const response: unknown =
-        await apiClient.get<ApiEnvelope<ManagedUser[]>>("/v1/users");
+        await apiClient.get<ApiEnvelope<ManagedUser[]>>("/users");
       const usersData = extractApiData<unknown>(response);
       if (!isManagedUserList(usersData)) {
         throw new Error("Dữ liệu danh sách người dùng không đúng định dạng.");
@@ -366,7 +366,7 @@ export function UserManagementPage() {
     setActionId("provision");
     try {
       await apiClient.post<ApiEnvelope<ManagedUser>>(
-        "/v1/users/provision-owner",
+        "/users/provision-owner",
         payload,
       );
       setProvisionOpen(false);
@@ -384,7 +384,7 @@ export function UserManagementPage() {
     setActionId("password");
     try {
       await apiClient.patch<ApiEnvelope<null>>(
-        "/v1/auth/change-password",
+        "/auth/change-password",
         payload,
       );
       setPasswordOpen(false);
@@ -409,7 +409,7 @@ export function UserManagementPage() {
     try {
       const payload: StatusPayload = { isActive: !user.isActive };
       await apiClient.patch<ApiEnvelope<ManagedUser>>(
-        `/v1/users/${user.id}/status`,
+        `/users/${user.id}/status`,
         payload,
       );
       setUsers((current) =>
@@ -438,7 +438,7 @@ export function UserManagementPage() {
     setError(null);
     try {
       await apiClient.post<ApiEnvelope<ManagedUser>>(
-        `/v1/users/${user.id}/reset-password`,
+        `/users/${user.id}/reset-password`,
       );
       setNotice(`Đã reset mật khẩu cho ${user.fullName}.`);
     } catch (requestError) {

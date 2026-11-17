@@ -22,7 +22,7 @@ export interface ManagedUser {
 export interface ProvisionOwnerPayload {
   email: string;
   fullName: string;
-  phoneNumber: string;
+  phone: string;
   facilityId: string;
 }
 
@@ -33,7 +33,7 @@ export interface StatusPayload {
 
 /** Dữ liệu yêu cầu thay đổi mật khẩu cá nhân. */
 export interface ChangePasswordPayload {
-  currentPassword: string;
+  oldPassword: string;
   newPassword: string;
 }
 
