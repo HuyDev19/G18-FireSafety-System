@@ -60,10 +60,10 @@ const roleLabels: Record<ManagedUser["role"], string> = {
 };
 
 const roleBadgeClasses: Record<ManagedUser["role"], string> = {
-  ADMIN: "bg-violet-50 text-violet-700",
-  LEADER: "bg-indigo-50 text-indigo-700",
+  ADMIN: "bg-red-50 text-red-700",
+  LEADER: "bg-blue-100 text-blue-900",
   INSPECTOR: "bg-cyan-50 text-cyan-700",
-  OWNER: "bg-amber-50 text-amber-700",
+  OWNER: "bg-orange-50 text-orange-700",
 };
 
 const managedUserRoles = new Set<ManagedUser["role"]>([
