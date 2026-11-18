@@ -172,51 +172,72 @@ flowchart LR
 
 ---
 
-## 3. Sơ đồ Tuần tự Luồng Kiểm tra, Tự sinh Vi phạm & Tự tính Điểm Rủi ro (Sequence Diagram)
-*Khớp với các API trong `05_HOP_DONG_API_VA_BAO_MAT.md` và hàm `calculateRiskScoreAndLevel` trong `02_KIEN_TRUC_VA_CONG_NGHE.md`.*
+## 3. Sơ đồ Tuần tự Trọn Luồng 4 Bước (Biên bản PC03 -> Nộp Ảnh -> Nghiệm thu -> Cập nhật Điểm Rủi ro)
+*Minh họa trọn vẹn kịch bản phản hồi theo góp ý của Thầy Long (Coordinator UTH), liên kết giữa Yêu cầu ↔ CSDL Schema ↔ Prototype UI.*
 
 ```mermaid
 %%{init: {'theme': 'base', 'sequence': {'mirrorActors': false}}}%%
 sequenceDiagram
     autonumber
     actor INS as 🕵️ Cán bộ (INSPECTOR)
-    participant FE5 as 💻 InspectionExecutionPage<br/>(Role 5 - FE)
-    participant BE4 as 🔍 Inspections & Documents API<br/>(Role 4 - BE)
-    participant BE3 as ⚙️ Facilities & Audit Service<br/>(Role 3 - BE)
-    participant DB as 🗄️ PostgreSQL & MinIO
     actor LDR as 👨‍💼 Lãnh đạo (LEADER)
+    actor OWN as 🏢 Chủ cơ sở (OWNER)
+    participant FE as 💻 Web Frontend (Next/React)
+    participant BE as ⚙️ Backend API (NestJS)
+    participant DB as 🗄️ Neon Cloud DB & MinIO
 
     rect rgb(239, 246, 255)
-        Note over INS,DB: BƯỚC 1: TẢI CHECKLIST, LƯU NHÁP LOCALSTORAGE & ĐÍNH KÈM ẢNH (FR-06, FR-08)
-        INS->>+FE5: Mở trang kiểm tra từ lịch (/inspections/:scheduleId)
-        FE5->>+BE4: GET /api/inspections/criteria
-        BE4->>+DB: Lấy danh mục InspectionCriteria đang active
-        DB-->>-BE4: Trả về danh sách tiêu chí
-        BE4-->>-FE5: Hiển thị form Checklist theo nhóm
+        Note over INS,DB: BƯỚC 1: LẬP BIÊN BẢN PC03 & LÃNH ĐẠO PHÊ DUYỆT (TĂNG ĐIỂM RỦI RO)
+        INS->>+FE: Lập biên bản kiểm tra PC03 tại hiện trường (Đánh giá tiêu chí, chụp ảnh lỗi)
+        FE->>+BE: POST /api/inspections/:id/submit
+        BE->>+DB: Lưu Inspection (status: SUBMITTED) & InspectionItem[]
+        DB-->>-BE: Ghi nhận thành công
+        BE-->>-FE: Thông báo nộp biên bản thành công
         
-        INS->>FE5: Đánh giá từng mục (PASS / FAIL / NA) -> Tự lưu nháp vào localStorage
-        FE5->>+BE4: POST /api/documents/upload (File JPG/PNG <= 10MB)
-        BE4->>+DB: Lưu vào MinIO bucket 'pccc-documents'
-        DB-->>-BE4: Trả về fileUrl
-        BE4-->>-FE5: Gắn fileUrl vào mảng imageUrls của tiêu chí
+        LDR->>+FE: Xem xét biên bản PC03 -> Bấm "Phê duyệt"
+        FE->>+BE: POST /api/inspections/:id/approve
+        BE->>+DB: Cập nhật Inspection (status: APPROVED, approvedAt: NOW())
+        BE->>DB: Tự động sinh bản ghi Violation (status: OPEN, deadline: +10 ngày)
+        BE->>DB: Kích hoạt Trigger FR-03: Cộng 30đ phạt vi phạm -> Facility.riskScore = 70 (HIGH)
+        BE->>DB: Lưu RiskScoreHistory (scoreBefore: 40, scoreAfter: 70, trigger: INSPECTION_APPROVED)
+        BE->>DB: Ghi nhật ký AuditLog
+        DB-->>-BE: Transaction thành công
+        BE-->>-FE: Cập nhật cơ sở sang chấm đỏ (HIGH) trên Bản đồ số GIS
     end
 
     rect rgb(254, 243, 199)
-        Note over INS,DB: BƯỚC 2: NỘP BIÊN BẢN -> TỰ SINH VI PHẠM -> TỰ TÍNH ĐIỂM RỦI RO (FR-03, FR-07)
-        INS->>FE5: Bấm "Nộp kết quả kiểm tra"
-        FE5->>+BE4: POST /api/inspections/:scheduleId/submit
+        Note over OWN,DB: BƯỚC 2: CHỦ CƠ SỞ NỘP MINH CHỨNG KHẮC PHỤC (FR-07, FR-08)
+        OWN->>+FE: Đăng nhập Cổng Doanh nghiệp (/doanh-nghiep/login)
+        FE->>+BE: GET /api/owner/violations
+        BE-->>-FE: Danh sách vi phạm (vio-001: Bình chữa cháy hết hạn)
+        OWN->>FE: Bấm "Báo cáo khắc phục" -> Chọn ảnh chụp hóa đơn/tem nạp bình mới
+        FE->>+BE: POST /api/violations/:id/report-fix (kèm file ảnh)
+        BE->>+DB: Upload ảnh lên MinIO bucket 'pccc-documents' (Private)
+        BE->>DB: Tạo ViolationEvidence (uploadedBy: OWNER, accessLevel: OWNER_AND_STAFF)
+        BE->>DB: Cập nhật Violation (status: FIXING)
+        DB-->>-BE: Lưu thành công
+        BE-->>-FE: Thông báo "Đã gửi minh chứng, chờ Cán bộ nghiệm thu"
+    end
+
+    rect rgb(240, 253, 244)
+        Note over INS,DB: BƯỚC 3 & 4: CÁN BỘ NGHIỆM THU ĐẠT & HỆ THỐNG TỰ ĐỘNG GIẢM ĐIỂM RỦI RO
+        INS->>+FE: Mở xem yêu cầu nghiệm thu vi phạm vio-001
+        FE->>+BE: GET /api/violations/:id/evidences (Xin Presigned URL)
+        BE->>+DB: Kiểm tra quyền truy cập (Chống IDOR) -> Ký Presigned URL MinIO (5 phút)
+        DB-->>-BE: Trả về link an toàn
+        BE-->>-FE: Hiển thị ảnh minh chứng rõ nét trên modal
         
-        BE4->>+DB: Bắt đầu Prisma $transaction: Lưu Inspection (SUBMITTED) & InspectionItem[]
-        BE4->>DB: Tự động tạo bản ghi bảng Violation (status = OPEN) cho mọi mục có result = FAIL
+        INS->>FE: Bấm "Xác nhận đạt yêu cầu" (Nghiệm thu hoàn tất)
+        FE->>+BE: POST /api/violations/:id/verify-resolve
+        BE->>+DB: Cập nhật Violation (status: RESOLVED, resolvedAt: NOW())
+        BE->>DB: Cập nhật ViolationEvidence (isVerified: true, verifiedById: inspectorId)
         
-        BE4->>+BE3: Gọi calculateRiskScoreAndLevel() tính lại điểm cơ sở (0-100đ)
-        BE3->>DB: Cập nhật Facility (riskScore, riskLevel) & thêm bản ghi RiskAssessment
-        BE3->>DB: Lưu vết vào bảng AuditLog (action = UPDATE, entity = INSPECTION)
-        BE3-->>-BE4: Trả về điểm rủi ro mới (VD: 58đ MEDIUM -> 66đ HIGH)
-        
-        DB-->>-BE4: Commit Transaction
-        BE4-->>-FE5: Trả về { success: true, data: inspection }
-        FE5-->>-INS: Xóa nháp localStorage, báo thành công & Cập nhật huy hiệu Mức độ nguy hiểm
+        Note over BE,DB: BƯỚC 4: KÍCH HOẠT TRIGGER GIẢM ĐIỂM TỰ ĐỘNG
+        BE->>DB: Thuật toán tự trừ 30đ phạt -> Facility.riskScore = 40 (MEDIUM - Vàng)
+        BE->>DB: Ghi bản ghi RiskScoreHistory (scoreBefore: 70, scoreAfter: 40, trigger: VIOLATION_RESOLVED)
+        BE->>DB: Ghi nhận AuditLog hoàn tất nghiệm thu
+        DB-->>-BE: Transaction hoàn tất
+        BE-->>-FE: Thông báo nghiệm thu thành công! Điểm rủi ro cơ sở hạ về 40đ (An toàn)
     end
 
     rect rgb(240, 253, 244)
