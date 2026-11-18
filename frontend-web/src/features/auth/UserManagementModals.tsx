@@ -150,6 +150,7 @@ interface ProvisionOwnerModalProps {
   facilityOptions?: readonly FacilityOption[];
   facilitySourceState?: FacilitySourceState;
   facilitySourceError?: string | null;
+  isFacilityDemoMode?: boolean;
 }
 
 export interface FacilityOption {
@@ -175,6 +176,7 @@ export function ProvisionOwnerModal({
   facilityOptions = defaultFacilityOptions,
   facilitySourceState = "unavailable",
   facilitySourceError = null,
+  isFacilityDemoMode = false,
 }: ProvisionOwnerModalProps) {
   const [form, setForm] = useState<ProvisionOwnerFormState>({
     email: "",
@@ -441,9 +443,16 @@ export function ProvisionOwnerModal({
               )}
           </label>
           <div className="form-label">
-            <label htmlFor="owner-facility-id" className="block">
-              Cơ sở cấp tài khoản
-            </label>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label htmlFor="owner-facility-id" className="block">
+                Cơ sở cấp tài khoản
+              </label>
+              {isFacilityDemoMode && (
+                <span className="inline-flex rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+                  Dữ liệu minh họa
+                </span>
+              )}
+            </div>
             <div
               ref={facilityComboboxRef}
               className="relative mt-2"

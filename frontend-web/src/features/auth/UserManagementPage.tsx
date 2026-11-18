@@ -34,6 +34,10 @@ import {
   ProvisionOwnerModal,
 } from "./UserManagementModals";
 import type {
+  FacilityOption,
+  FacilitySourceState,
+} from "./UserManagementModals";
+import type {
   ApiEnvelope,
   ChangePasswordPayload,
   ManagedUser,
@@ -49,6 +53,9 @@ const USERS_PER_PAGE = 10;
 const paginationFixtureEnabled =
   import.meta.env.DEV &&
   import.meta.env.VITE_USER_MANAGEMENT_FIXTURE === "pagination-23";
+const facilityDemoEnabled =
+  import.meta.env.DEV &&
+  import.meta.env.VITE_FACILITY_DEMO_MODE === "true";
 const paginationFixtureModulePath =
   "./userManagement.pagination.fixture";
 
@@ -268,6 +275,13 @@ export function UserManagementPage() {
   const toastSequenceRef = useRef(0);
   const [headerSearchOpen, setHeaderSearchOpen] = useState(false);
   const [headerQuery, setHeaderQuery] = useState("");
+  const [facilityOptions, setFacilityOptions] = useState<
+    readonly FacilityOption[]
+  >([]);
+  const [facilitySourceState, setFacilitySourceState] =
+    useState<FacilitySourceState>(
+      facilityDemoEnabled ? "loading" : "unavailable",
+    );
   const isMandatoryPasswordChange =
     currentUser?.mustChangePassword === true;
 
@@ -323,6 +337,19 @@ export function UserManagementPage() {
 
   useEffect(() => {
     void loadUsers();
+  }, []);
+
+  useEffect(() => {
+    if (!facilityDemoEnabled) {
+      setFacilityOptions([]);
+      setFacilitySourceState("unavailable");
+      return;
+    }
+
+    void import("./facility.demo.fixture").then(({ facilityDemoOptions }) => {
+      setFacilityOptions(facilityDemoOptions);
+      setFacilitySourceState("ready");
+    });
   }, []);
 
   useEffect(() => {
@@ -410,6 +437,12 @@ export function UserManagementPage() {
     dismissSuccessToast();
     setModalError(null);
     setError(null);
+    if (payload.facilityId.startsWith("demo-")) {
+      setModalError(
+        "Chế độ demo: thao tác đã được mô phỏng. Không tạo tài khoản thật.",
+      );
+      return;
+    }
     setActionId("provision");
     try {
       const response: unknown = await apiClient.post<ApiEnvelope<ManagedUser>>(
@@ -1092,6 +1125,9 @@ export function UserManagementPage() {
           error={modalError}
           onClose={() => setProvisionOpen(false)}
           onSubmit={provisionOwner}
+          facilityOptions={facilityOptions}
+          facilitySourceState={facilitySourceState}
+          isFacilityDemoMode={facilityDemoEnabled}
         />
       )}
       {passwordOpen && (
