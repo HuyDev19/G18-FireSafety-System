@@ -29,11 +29,11 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post('provision-owner')
-  @Roles(RoleCode.ADMIN, RoleCode.INSPECTOR)
+  @Roles(RoleCode.ADMIN, RoleCode.LEADER, RoleCode.INSPECTOR)
   @ApiOperation({
     summary: 'Cấp phát tài khoản Doanh nghiệp / Chủ cơ sở (Identity Provisioning)',
     description:
-      'Chỉ Admin hoặc Cán bộ kiểm tra phụ trách cơ sở mới được cấp phát. Bắt buộc gắn liền với facilityId, cấm tự đăng ký.',
+      'Chỉ Admin, Lãnh đạo hoặc Cán bộ kiểm tra phụ trách cơ sở mới được cấp phát. Bắt buộc gắn liền với facilityId, cấm tự đăng ký.',
   })
   @ApiResponse({ status: 201, description: 'Cấp phát tài khoản thành công kèm mật khẩu tạm' })
   async provisionOwner(

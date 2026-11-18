@@ -17,6 +17,11 @@ export class ProvisionOwnerDto {
   @IsString()
   phone?: string;
 
+  @ApiPropertyOptional({ example: '0901234567', description: 'Alias số điện thoại liên hệ (hỗ trợ tương thích Frontend)' })
+  @IsOptional()
+  @IsString()
+  phoneNumber?: string;
+
   @ApiProperty({ example: 'a0000000-0000-0000-0000-000000000001', description: 'ID cơ sở gắn liền với tài khoản' })
   @IsUUID('all', { message: 'ID cơ sở phải là UUID hợp lệ' })
   @IsNotEmpty({ message: 'ID cơ sở không được để trống' })

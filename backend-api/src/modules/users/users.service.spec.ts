@@ -187,6 +187,57 @@ describe('UsersService - Identity Provisioning (FR-01)', () => {
         }),
       );
     });
+
+    it('should allow LEADER to provision owner account and accept phoneNumber alias', async () => {
+      const leaderUser: AuthenticatedUser = {
+        id: 'leader-1',
+        email: 'lanhdao@pccc.gov.vn',
+        role: RoleCode.LEADER,
+        areaCode: 'ALL',
+        fullName: 'Lãnh đạo Trần',
+      };
+
+      mockPrisma.facility.findFirst.mockResolvedValue(targetFacility);
+      mockPrisma.user.findUnique.mockResolvedValue(null);
+
+      const createdUserMock = {
+        id: 'user-new-leader',
+        email: 'owner_leader@example.com',
+        fullName: 'Chủ do Lãnh đạo cấp',
+        phone: '0901112233',
+        role: RoleCode.OWNER,
+        mustChangePassword: true,
+        provisionedById: leaderUser.id,
+        createdAt: new Date(),
+      };
+
+      mockPrisma.$transaction.mockImplementation(async (callback: any) => {
+        return callback({
+          user: { create: jest.fn().mockResolvedValue(createdUserMock) },
+          facility: { update: jest.fn().mockResolvedValue(targetFacility) },
+        });
+      });
+
+      const result = await service.provisionOwner(
+        leaderUser,
+        {
+          email: 'owner_leader@example.com',
+          fullName: 'Chủ do Lãnh đạo cấp',
+          phoneNumber: '0901112233', // test phoneNumber alias
+          facilityId: 'fac-1',
+        },
+        '10.0.0.1',
+      );
+
+      expect(result.user.email).toBe('owner_leader@example.com');
+      expect(result.user.role).toBe(RoleCode.OWNER);
+      expect(mockAudit.createLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'PROVISION_OWNER',
+          userId: leaderUser.id,
+        }),
+      );
+    });
   });
 });
 

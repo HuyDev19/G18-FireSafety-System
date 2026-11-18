@@ -47,8 +47,12 @@ export class UsersService {
     ipAddress?: string,
   ) {
     // 1. Kiểm tra vai trò người gọi
-    if (currentUser.role !== RoleCode.ADMIN && currentUser.role !== RoleCode.INSPECTOR) {
-      throw new ForbiddenException('Chỉ Cán bộ kiểm tra hoặc Quản trị viên mới có quyền cấp tài khoản cơ sở');
+    if (
+      currentUser.role !== RoleCode.ADMIN &&
+      currentUser.role !== RoleCode.LEADER &&
+      currentUser.role !== RoleCode.INSPECTOR
+    ) {
+      throw new ForbiddenException('Chỉ Cán bộ kiểm tra, Lãnh đạo hoặc Quản trị viên mới có quyền cấp tài khoản cơ sở');
     }
 
     // 2. Kiểm tra sự tồn tại của cơ sở
@@ -73,6 +77,13 @@ export class UsersService {
           'Bạn không có quyền cấp tài khoản cho cơ sở nằm ngoài địa bàn hoặc cơ sở chưa được phân công',
         );
       }
+    } else if (currentUser.role === RoleCode.LEADER && currentUser.areaCode && !currentUser.areaCode.includes('ALL')) {
+      const isAllowedArea = isAreaAllowed(currentUser.areaCode, facility.district, currentUser.role);
+      if (!isAllowedArea) {
+        throw new ForbiddenException(
+          'Lãnh đạo không có quyền cấp tài khoản cho cơ sở nằm ngoài địa bàn phụ trách',
+        );
+      }
     }
 
     // 4. Kiểm tra email đã tồn tại hay chưa
@@ -84,7 +95,8 @@ export class UsersService {
       throw new ConflictException('Email này đã được sử dụng trên hệ thống');
     }
 
-    // 5. Chuẩn bị mật khẩu tạm & băm bcrypt
+    // 5. Chuẩn bị số điện thoại (hỗ trợ cả phone lẫn phoneNumber alias) & mật khẩu tạm
+    const resolvedPhone = dto.phone?.trim() || dto.phoneNumber?.trim() || null;
     const temporaryPassword = dto.temporaryPassword || this.generateSecurePassword();
     const passwordHash = await bcrypt.hash(temporaryPassword, 10);
 
@@ -95,7 +107,7 @@ export class UsersService {
           email: dto.email.toLowerCase().trim(),
           passwordHash,
           fullName: dto.fullName.trim(),
-          phone: dto.phone?.trim() || null,
+          phone: resolvedPhone,
           role: RoleCode.OWNER,
           isActive: true,
           mustChangePassword: true, // Bắt buộc đổi mật khẩu lần đầu đăng nhập
@@ -108,7 +120,7 @@ export class UsersService {
         data: {
           ownerUserId: createdUser.id,
           ownerName: dto.fullName.trim(),
-          ownerPhone: dto.phone?.trim() || facility.ownerPhone,
+          ownerPhone: resolvedPhone || facility.ownerPhone,
           ownerEmail: dto.email.toLowerCase().trim(),
         },
       });

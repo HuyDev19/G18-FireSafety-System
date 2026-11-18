@@ -105,6 +105,7 @@ model Facility {
   incidents           Incident[]
   documents           Document[]
   riskAssessments     RiskAssessment[]
+  riskScoreHistories  RiskScoreHistory[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   deletedAt           DateTime?            // Xóa mềm
@@ -203,8 +204,12 @@ model Inspection {
   approvedBy          User?              @relation("ApproverUser", fields: [approvedById], references: [id])
   approvedAt          DateTime?
   reviewNote          String?
+  attendees           String[]           // Danh sách cán bộ trong đoàn kiểm tra (Mẫu PC03 theo NĐ 105/2025/NĐ-CP)
+  representativeName  String?            // Họ tên người đại diện cơ sở tham gia làm việc
+  representativeTitle String?            // Chức vụ của người đại diện cơ sở
   items               InspectionItem[]
   violations          Violation[]
+  riskHistories       RiskScoreHistory[]
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 }
@@ -307,4 +312,21 @@ model AuditLog {
 
   @@index([entity, entityId])
   @@index([userId, createdAt])
+}
+
+// 15. Bảng Lịch sử Biến động Điểm Rủi ro (FR-03 Trend Chart)
+model RiskScoreHistory {
+  id           String      @id @default(uuid())
+  facilityId   String
+  facility     Facility    @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  inspectionId String?
+  inspection   Inspection? @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  scoreBefore  Int
+  scoreAfter   Int
+  triggerEvent String      // INSPECTION_APPROVED, VIOLATION_RESOLVED, EQUIPMENT_STATUS_CHANGED, MANUAL_OVERRIDE
+  changeReason String?
+  recordedAt   DateTime    @default(now())
+
+  @@index([facilityId, recordedAt])
+  @@index([triggerEvent])
 }
