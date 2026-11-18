@@ -8,7 +8,7 @@
 
 ---
 
-## 2. Schema Prisma Chuẩn 14 Bảng (`backend-api/prisma/schema.prisma`)
+## 2. Schema Prisma Chuẩn 16 Bảng (Bổ sung theo Góp ý Nghiệp vụ UTH) (`backend-api/prisma/schema.prisma`)
 
 ```prisma
 generator client {
@@ -215,8 +215,12 @@ model Inspection {
   approvedBy          User?              @relation("ApproverUser", fields: [approvedById], references: [id])
   approvedAt          DateTime?
   reviewNote          String?
+  attendees           String[]           // Danh sách cán bộ trong đoàn kiểm tra (Mẫu PC03)
+  representativeName  String?            // Họ tên người đại diện cơ sở tham gia làm việc
+  representativeTitle String?            // Chức vụ của người đại diện cơ sở
   items               InspectionItem[]
   violations          Violation[]
+  riskHistories       RiskScoreHistory[]
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
 }
@@ -248,7 +252,8 @@ model Violation {
   status            String      @default("OPEN")  // OPEN, FIXING (Chờ cán bộ nghiệm thu), RESOLVED, OVERDUE
   resolvedAt        DateTime?
   resolutionNote    String?
-  evidenceImageUrls String[]
+  evidenceImageUrls String[]    // Danh sách URL ảnh nhanh
+  evidences         ViolationEvidence[] // Quan hệ chi tiết metadata minh chứng (FR-08)
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
