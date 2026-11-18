@@ -66,3 +66,84 @@
 
 * **Ngưỡng phân loại tự động:** `0 – 34 điểm`: **Thấp (`LOW` - Xanh)** · `35 – 64 điểm`: **Trung bình (`MEDIUM` - Vàng)** · `65 – 100 điểm`: **Cao (`HIGH` - Đỏ)**.
 * *(Lưu ý: Cơ sở pháp lý đối chiếu theo **Luật PCCC & CNCH 55/2024/QH15**, **Nghị định 105/2025/NĐ-CP**, **Nghị định 106/2025/NĐ-CP**, **Nghị định 69/2026/NĐ-CP** và **Nghị định 347/2026/NĐ-CP** [thay thế NĐ 136/2020/NĐ-CP]; bảng điểm FR-03 và khung phạt tham chiếu là quy tắc cấu hình nội bộ phục vụ demo và xác nhận với GTel OTS).*
+---
+
+## 5. Phân tích Nghiệp vụ Biểu mẫu Phụ lục VIII (Nghị định 105/2025/NĐ-CP)
+
+Căn cứ Phụ lục VIII Nghị định số 105/2025/NĐ-CP quy định chi tiết thi hành một số điều của Luật PCCC & CNCH số 55/2024/QH15, hệ thống chuẩn hóa 3 biểu mẫu cốt lõi:
+- **Mẫu PC01 - Phiếu thông tin cơ sở:** Thu thập hồ sơ ban đầu khi cơ sở đăng ký hoạt động hoặc đưa vào diện quản lý.
+- **Mẫu PC02 - Biên bản tự kiểm tra an toàn PCCC:** Do người đứng đầu cơ sở tự tổ chức kiểm tra định kỳ (tháng/quý) và tự lưu trữ/báo cáo cơ quan chức năng.
+- **Mẫu PC03 - Biên bản kiểm tra an toàn PCCC:** Do đoàn kiểm tra của Cơ quan Công an PCCC lập tại hiện trường khi tiến hành kiểm tra định kỳ hoặc đột xuất.
+
+### 5.1. Bảng Phân tích Chi tiết Biểu mẫu Trọng tâm PC03 (Biên bản Kiểm tra An toàn PCCC)
+
+| Thành phần trong Mẫu PC03 | Thuộc tính đối chiếu trong CSDL | Nguồn dữ liệu (Phân loại) | Ai xác nhận / Ký duyệt |
+| :--- | :--- | :--- | :--- |
+| **1. Thông tin chung cơ sở**<br>- Tên cơ sở, địa chỉ hành chính<br>- Người đại diện pháp luật, SĐT<br>- Loại hình, diện tích, số tầng, năm xây dựng<br>- Giấy phép / Văn bản thẩm duyệt PCCC | `Facility.name`, `Facility.address`<br>`Facility.ownerName`, `Facility.ownerPhone`<br>`Facility.facilityTypeId`, `Facility.areaM2`<br>`Facility.floors`, `Document.docNumber` | **Hồ sơ cũ kế thừa**<br>(Tự động trích xuất từ bảng `Facility` & `Document`, không phải gõ lại) | Cán bộ kiểm tra đối soát thực tế |
+| **2. Thành phần làm việc**<br>- Trưởng đoàn & Cán bộ kiểm tra<br>- Đại diện chủ cơ sở / Người được ủy quyền | `Inspection.inspectorId`<br>`Inspection.attendees` (Mảng cán bộ đi cùng)<br>`Inspection.representativeName`<br>`Inspection.representativeTitle` | **Phát sinh trong lần kiểm tra**<br>(Nhập tại hiện trường khi bắt đầu buổi làm việc) | Các bên ký tên vào biên bản |
+| **3. Nội dung & Kết quả kiểm tra**<br>- Kiểm tra hồ sơ quản lý, theo dõi PCCC<br>- Kiểm tra thực tế thiết bị, hệ thống báo cháy, chữa cháy<br>- Kiểm tra đường thoát nạn, ngăn cháy lan<br>- Đánh giá 16 tiêu chí checklist | `InspectionItem.criterionId`<br>`InspectionItem.status` (`PASS`/`FAIL`/`NA`)<br>`InspectionItem.note`<br>`InspectionItem.evidenceUrl` | **Phát sinh trong lần kiểm tra**<br>(Cán bộ tích chọn Đạt / Không đạt trên ứng dụng) | Cán bộ kiểm tra ghi nhận |
+| **4. Danh sách Vi phạm & Biện pháp xử lý**<br>- Mô tả hành vi vi phạm cụ thể<br>- Căn cứ pháp lý (Điều/Khoản NĐ 106/2025)<br>- Thời hạn yêu cầu khắc phục (Deadline)<br>- Tạm đình chỉ / Yêu cầu ngừng hoạt động | `Violation.description`<br>`Violation.legalBasis`<br>`Violation.deadline`<br>`Violation.severity` (`MINOR`/`MAJOR`/`CRITICAL`)<br>`Inspection.remediationDeadline` | **Phát sinh trong lần kiểm tra**<br>(Tự động trích xuất từ các tiêu chí bị đánh giá `FAIL`) | Lãnh đạo PCCC ký quyết định |
+| **5. Kết luận & Chữ ký xác nhận**<br>- Kết luận chung: Đạt / Tồn tại vi phạm<br>- Ý kiến của Đại diện cơ sở<br>- Chữ ký Cán bộ lập biên bản<br>- Chữ ký & Đóng dấu Lãnh đạo phê duyệt | `Inspection.result` (`PASSED`/`FAILED`)<br>`Inspection.conclusion`<br>`Inspection.status` (`SUBMITTED` -> `APPROVED`)<br>`Inspection.approvedById`, `Inspection.approvedAt`<br>`Inspection.pdfHash` (Mã QR SHA-256) | **Xác nhận kết quả**<br>(Quy trình ký số / duyệt biên bản điện tử) | 1. Chủ cơ sở ký nhận<br>2. Cán bộ lập biên bản ký<br>3. Lãnh đạo PCCC duyệt chốt |
+
+---
+
+## 6. Kịch bản Mẫu Minh Họa Trọn Luồng 4 Bước (End-to-End Scenario Walkthrough)
+
+Để chứng minh tính nhất quán giữa **Yêu cầu nghiệp vụ ↔ CSDL Schema ↔ Giao diện Prototype**, hệ thống thiết lập kịch bản thực tế khép kín sau:
+
+* **Đối tượng giả lập:** Cơ sở *"Xưởng Dệt May An Lạc"* (Mã: `CS-BT-001`, Địa chỉ: Quận Bình Tân, Loại hình: Nhà máy sản xuất, Điểm rủi ro ban đầu: `40/100` - Mức `MEDIUM`).
+* **Hành vi vi phạm giả lập:** *"Bình chữa cháy bột ABC 8kg hết hạn kiểm định áp suất khí đẩy"* (Vi phạm Tiêu chí TC-04, tham chiếu Nghị định 106/2025/NĐ-CP).
+
+```text
+[BƯỚC 1: LẬP & DUYỆT PC03] ──> [BƯỚC 2: CHỦ CƠ SỞ NỘP ẢNH] ──> [BƯỚC 3: NGHIỆM THU ĐẠT] ──> [BƯỚC 4: HỆ THỐNG GIẢM ĐIỂM]
+ Cán bộ lập, Lãnh đạo duyệt        Chủ cơ sở gửi ảnh bình mới          Cán bộ xác nhận hoàn thành         Điểm rủi ro hạ từ 70đ
+ Vi phạm chuyển OPEN               Vi phạm chuyển FIXING             Vi phạm chuyển RESOLVED            về 40đ (MEDIUM)
+ Điểm rủi ro tăng 40đ -> 70đ (HIGH) File lưu MinIO + Metadata         Lưu vết AuditLog                   Ghi RiskScoreHistory
+```
+
+### Chi tiết 4 Bước Thực thi:
+1. **Bước 1: Cán bộ lập và duyệt Biên bản kiểm tra PC03**
+   * *Ai thao tác:* Cán bộ PCCC (`INSPECTOR`) lập biên bản tại hiện trường → Lãnh đạo (`LEADER`) bấm duyệt.
+   * *Dữ liệu thay đổi:* 
+     - Bản ghi `Inspection` chuyển `status: "APPROVED"`.
+     - Tự động sinh 1 bản ghi `Violation` (ID: `vio-001`, `status: "OPEN"`, `deadline: 2026-11-25`).
+     - Hệ thống kích hoạt Engine tính điểm: Điểm phạt vi phạm `+30đ`. Cập nhật `Facility.riskScore = 70` (Mức rủi ro chuyển thành `HIGH` - Báo động đỏ).
+     - Ghi nhận 1 bản ghi vào `RiskScoreHistory` (Lý do: *"Phát hiện vi phạm bình chữa cháy theo Biên bản PC03"*).
+   * *Quy tắc áp dụng:* Quy tắc kích hoạt FR-03 (Trigger Event on `Inspection.APPROVED`).
+
+2. **Bước 2: Chủ cơ sở nộp ảnh minh chứng khắc phục qua Cổng Doanh nghiệp**
+   * *Ai thao tác:* Chủ cơ sở (`OWNER`) đăng nhập tại `/doanh-nghiep/login`, vào mục Vi phạm, bấm *"Báo cáo khắc phục"*.
+   * *Dữ liệu thay đổi:*
+     - Tải ảnh chụp biên bản nạp bình và tem kiểm định mới lên MinIO bucket `pccc-documents`.
+     - Tạo bản ghi `ViolationEvidence` (ID: `evi-001`, `violationId: "vio-001"`, `uploadedById: user.id`, `uploadedByRole: "OWNER"`, `accessLevel: "OWNER_AND_STAFF"`).
+     - Bản ghi `Violation` chuyển `status: "FIXING"` (Chờ nghiệm thu).
+   * *Quy tắc áp dụng:* Phân quyền quản lý tài liệu FR-08 (Chỉ Cán bộ địa bàn và Chủ cơ sở mới có quyền xem ảnh minh chứng qua Presigned URL).
+
+3. **Bước 3: Cán bộ PCCC xác nhận kết quả nghiệm thu**
+   * *Ai thao tác:* Cán bộ PCCC phụ trách địa bàn (`INSPECTOR`) kiểm tra đối soát ảnh hoặc tái kiểm hiện trường → Bấm *"Xác nhận đã khắc phục"*.
+   * *Dữ liệu thay đổi:*
+     - Bản ghi `Violation` chuyển `status: "RESOLVED"`, ghi nhận `resolvedAt = NOW()`, `resolutionNote: "Đã thay mới 04 bình chữa cháy đạt chuẩn"`.
+     - Ghi vết hành chính vào `AuditLog`.
+   * *Quy tắc áp dụng:* Quy tắc đóng vi phạm FR-07.
+
+4. **Bước 4: Hệ thống tự động cập nhật giảm điểm rủi ro**
+   * *Ai thao tác:* Hệ thống chạy tự động ngầm (System Automated Job).
+   * *Dữ liệu thay đổi:*
+     - Thuật toán trừ `30đ` điểm phạt của vi phạm đã giải quyết.
+     - Điểm số cơ sở hạ từ `70đ` về `40đ` → Mức rủi ro tự động chuyển từ `HIGH` (Đỏ) xuống `MEDIUM` (Vàng).
+     - Ghi bản ghi vào `RiskScoreHistory`: `scoreBefore: 70`, `scoreAfter: 40`, `changeReason: "Nghiệm thu khắc phục hoàn thành vi phạm vio-001"`.
+     - Cập nhật màu Marker trên Bản đồ số GIS (FR-09) chuyển từ Đỏ sang Vàng.
+
+---
+
+## 7. Quy tắc Phân nhóm Nguy cơ Cơ sở A–E (Giả định Nghiệp vụ)
+
+Phục vụ việc thiết kế CSDL và tham vấn chuyên môn với Mentor GTel OTS, hệ thống thiết lập giả định phân loại 5 nhóm cơ sở (Nhóm A đến Nhóm E) dựa trên tính chất cháy nổ và quy mô tập trung đông người:
+
+| Nhóm | Tên Phân loại Giả định | Loại hình Tiêu biểu | Tiêu chí Định lượng Giả định | Tần suất Kiểm tra Định kỳ |
+| :---: | :--- | :--- | :--- | :---: |
+| **Nhóm A** | **Nguy cơ Cháy nổ Đặc biệt Cao** | Kho xăng dầu, hóa chất, nhà máy sơn, kho pháo hoa, vũ trường, quán bar ngầm | Tồn trữ > 50 tấn chất dễ cháy hoặc sức chứa ngầm > 200 người | **3 tháng / lần** (4 lần/năm) |
+| **Nhóm B** | **Nguy cơ Cháy nổ Cao** | TTTM, Chợ kiên cố, Chung cư cao tầng (>= 10 tầng), Xưởng gỗ, Xưởng may lớn | Diện tích sàn > 3.000 m² hoặc cao từ 28m trở lên | **6 tháng / lần** (2 lần/năm) |
+| **Nhóm C** | **Nguy cơ Cháy nổ Trung bình** | Khách sạn, Bệnh viện, Trường học, Tòa nhà văn phòng, Kho bãi thông thường | Diện tích từ 1.000 – 3.000 m², cao dưới 28m | **12 tháng / lần** (1 lần/năm) |
+| **Nhóm D** | **Nguy cơ Cháy nổ Thấp** | Trụ sở hành chính, cửa hàng bán lẻ nhỏ, xưởng thủ công không dùng nhiệt | Diện tích từ 300 – 1.000 m² | **24 tháng / lần** (Theo kế hoạch) |
+| **Nhóm E** | **Cơ sở diện Tự kiểm tra** | Hộ kinh doanh cá thể nhỏ lẻ, nhà ở kết hợp kinh doanh nhỏ | Diện tích sàn < 300 m² | Cơ sở tự lập **Biên bản PC02** hàng năm |

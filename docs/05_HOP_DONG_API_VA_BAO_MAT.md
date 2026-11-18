@@ -62,7 +62,36 @@
 
 ---
 
-## 4. Kịch bản Demo Bảo vệ 10 Phút Trước Hội đồng GTEL OTS (5 Thành viên)
+## 4. Đặc tả Ma trận Sự kiện Kích hoạt Cập nhật Điểm Rủi ro (FR-03 Trigger Matrix)
+
+Căn cứ yêu cầu làm rõ của Thầy Long (Coordinator UTH), việc cập nhật điểm rủi ro và xếp loại nguy cơ cơ sở không diễn ra tùy tiện mà được kích hoạt bởi 4 sự kiện có điều kiện rõ ràng:
+
+| Sự kiện Kích hoạt (Trigger Event) | Điều kiện Tiền đề | Quy tắc Tính toán & Nghiệp vụ Áp dụng | Kết quả Hệ thống Phải Lưu Trữ |
+| :--- | :--- | :--- | :--- |
+| **1. `INSPECTION_APPROVED`**<br>(Lãnh đạo duyệt Biên bản PC03) | Biên bản chuyển từ `SUBMITTED` sang `APPROVED` | - Lấy điểm rủi ro hiện tại.<br>- Lấy danh sách các vi phạm mới sinh từ các tiêu chí bị đánh giá `FAIL`.<br>- Cộng điểm phạt vi phạm theo khung NĐ 106/2025 (`+3đ` vi phạm nhẹ, `+8đ` vi phạm nặng, `+15đ` lỗi đặc biệt nghiêm trọng).<br>- Tối đa điểm rủi ro chạm trần `100đ`. | - Cập nhật `Facility.riskScore` & `Facility.riskLevel`.<br>- Tạo bản ghi `RiskScoreHistory` ghi rõ `inspectionId` làm căn cứ pháp lý.<br>- Ghi nhận `AuditLog` hành động duyệt của Lãnh đạo. |
+| **2. `VIOLATION_RESOLVED`**<br>(Cán bộ nghiệm thu khắc phục) | Cán bộ PCCC xác nhận ảnh minh chứng đạt yêu cầu (`isVerified = true`), chuyển vi phạm sang `RESOLVED` | - Khấu trừ điểm phạt tương ứng của vi phạm đã được giải quyết ra khỏi tổng điểm rủi ro cơ sở.<br>- Tự động hạ mức nguy cơ (Ví dụ từ `HIGH` đỏ về `MEDIUM` vàng) nếu tổng điểm rơi xuống dưới ngưỡng 65đ. | - Cập nhật `Facility.riskScore` & `Facility.riskLevel`.<br>- Cập nhật `Violation.resolvedAt` & `Violation.resolutionNote`.<br>- Tạo bản ghi `RiskScoreHistory` ghi rõ lý do khắc phục.<br>- Đổi màu Marker cơ sở trên Bản đồ số GIS (FR-09). |
+| **3. `EQUIPMENT_STATUS_CHANGED`**<br>(Thiết bị PCCC quá hạn kiểm định) | Cronjob 06:00 sáng quét thấy thiết bị hết hạn hoặc thêm/bớt thiết bị bắt buộc | - Tính lại tỷ lệ thiếu hụt thiết bị PCCC theo công thức Nhóm 3 (Tối đa 25đ). | - Cập nhật `Facility.riskScore`.<br>- Tạo bản ghi `RiskScoreHistory` do `SYSTEM` ghi nhận.<br>- Bắn thông báo cảnh báo `Notification` cho Cán bộ & Chủ cơ sở. |
+| **4. `MANUAL_OVERRIDE`**<br>(Lãnh đạo can thiệp điểm số) | `LEADER` hoặc `ADMIN` ghi đè mức rủi ro trong trường hợp khẩn cấp | - Ghi nhận mức rủi ro mới và bật cờ `riskOverridden = true`.<br>- Bắt buộc nhập văn bản/lý do can thiệp. | - Cập nhật `Facility.riskLevel`.<br>- Tạo bản ghi `RiskScoreHistory` kèm `changeReason`.<br>- Ghi cảnh báo an ninh nghiệp vụ vào `AuditLog`. |
+
+---
+
+## 5. Quy chế Quản lý & Phân quyền Truy cập File Minh chứng Khắc phục Vi phạm (FR-07, FR-08)
+
+Hệ thống PCCC GovTech không lưu ảnh bừa bãi mà quản lý file minh chứng như một thực thể hành chính có phân quyền nghiêm ngặt:
+
+1. **Cấu trúc Dữ liệu Bắt buộc cho Mỗi File Minh chứng (`ViolationEvidence`):**
+   * `violationId`: Thuộc vi phạm cụ thể nào (Liên kết khóa ngoại).
+   * `uploadedById`: Ai là người tải lên (User ID).
+   * `uploadedByRole`: Vai trò người nộp (`OWNER` tự nộp báo cáo khắc phục hoặc `INSPECTOR` chụp tại hiện trường tái kiểm).
+   * `createdAt`: Thời điểm chính xác nộp file (Timestamp có giá trị pháp lý đối chiếu hạn chót `deadline`).
+   * `accessLevel`: Quyền truy cập (`RESTRICTED_INTERNAL` - chỉ Cán bộ xem; `OWNER_AND_STAFF` - Chủ cơ sở & Cán bộ phụ trách; `PUBLIC` - Công khai).
+2. **Quy tắc Bảo mật Tệp tin (File Security Policy):**
+   * File được lưu trữ trên cụm MinIO S3 bucket `pccc-documents` ở chế độ **Private (`none`)**.
+   * Khi người dùng xem ảnh/biên bản, Backend kiểm tra quyền trong CSDL (chống IDOR). Nếu hợp lệ, Backend sinh **Presigned URL có thời hạn 5 phút** trỏ về `MINIO_PUBLIC_URL` để trình duyệt tải tệp. Hết 5 phút đường link tự hủy, ngăn chặn việc chia sẻ link trái phép ra ngoài.
+
+---
+
+## 6. Kịch bản Demo Bảo vệ 10 Phút Trước Hội đồng GTEL OTS (5 Thành viên)
 
 1. **Phút 1 – 2 (Role 3 & Role 2 - Quản lý Cơ sở, Cấp tài khoản Chủ cơ sở & Chấm điểm Rủi ro Tự động):**
    * Đăng nhập Cổng Nội bộ `/admin-portal/login` bằng tài khoản Cán bộ PCCC (xác thực OTP 2FA).
