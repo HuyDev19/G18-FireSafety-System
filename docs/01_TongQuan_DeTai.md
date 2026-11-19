@@ -70,20 +70,105 @@
 
 ## 5. Phân tích Nghiệp vụ Biểu mẫu Phụ lục VIII (Nghị định 105/2025/NĐ-CP)
 
-Căn cứ Phụ lục VIII Nghị định số 105/2025/NĐ-CP quy định chi tiết thi hành một số điều của Luật PCCC & CNCH số 55/2024/QH15, hệ thống chuẩn hóa 3 biểu mẫu cốt lõi:
-- **Mẫu PC01 - Phiếu thông tin cơ sở:** Thu thập hồ sơ ban đầu khi cơ sở đăng ký hoạt động hoặc đưa vào diện quản lý.
-- **Mẫu PC02 - Biên bản tự kiểm tra an toàn PCCC:** Do người đứng đầu cơ sở tự tổ chức kiểm tra định kỳ (tháng/quý) và tự lưu trữ/báo cáo cơ quan chức năng.
-- **Mẫu PC03 - Biên bản kiểm tra an toàn PCCC:** Do đoàn kiểm tra của Cơ quan Công an PCCC lập tại hiện trường khi tiến hành kiểm tra định kỳ hoặc đột xuất.
+Căn cứ **Phụ lục VIII Nghị định số 105/2025/NĐ-CP** (hướng dẫn thi hành Luật PCCC & CNCH số 55/2024/QH15), hệ thống chuẩn hóa và phân định rõ 3 biểu mẫu nghiệp vụ cốt lõi, xác định rõ nguồn dữ liệu kế thừa và phát sinh:
 
-### 5.1. Bảng Phân tích Chi tiết Biểu mẫu Trọng tâm PC03 (Biên bản Kiểm tra An toàn PCCC)
+### 5.1. Tổng quan 3 Biểu mẫu Cốt lõi Phụ lục VIII
 
-| Thành phần trong Mẫu PC03 | Thuộc tính đối chiếu trong CSDL | Nguồn dữ liệu (Phân loại) | Ai xác nhận / Ký duyệt |
-| :--- | :--- | :--- | :--- |
-| **1. Thông tin chung cơ sở**<br>- Tên cơ sở, địa chỉ hành chính<br>- Người đại diện pháp luật, SĐT<br>- Loại hình, diện tích, số tầng, năm xây dựng<br>- Giấy phép / Văn bản thẩm duyệt PCCC | `Facility.name`, `Facility.address`<br>`Facility.ownerName`, `Facility.ownerPhone`<br>`Facility.facilityTypeId`, `Facility.areaM2`<br>`Facility.floors`, `Document.docNumber` | **Hồ sơ cũ kế thừa**<br>(Tự động trích xuất từ bảng `Facility` & `Document`, không phải gõ lại) | Cán bộ kiểm tra đối soát thực tế |
-| **2. Thành phần làm việc**<br>- Trưởng đoàn & Cán bộ kiểm tra<br>- Đại diện chủ cơ sở / Người được ủy quyền | `Inspection.inspectorId`<br>`Inspection.attendees` (Mảng cán bộ đi cùng)<br>`Inspection.representativeName`<br>`Inspection.representativeTitle` | **Phát sinh trong lần kiểm tra**<br>(Nhập tại hiện trường khi bắt đầu buổi làm việc) | Các bên ký tên vào biên bản |
-| **3. Nội dung & Kết quả kiểm tra**<br>- Kiểm tra hồ sơ quản lý, theo dõi PCCC<br>- Kiểm tra thực tế thiết bị, hệ thống báo cháy, chữa cháy<br>- Kiểm tra đường thoát nạn, ngăn cháy lan<br>- Đánh giá 16 tiêu chí checklist | `InspectionItem.criterionId`<br>`InspectionItem.status` (`PASS`/`FAIL`/`NA`)<br>`InspectionItem.note`<br>`InspectionItem.evidenceUrl` | **Phát sinh trong lần kiểm tra**<br>(Cán bộ tích chọn Đạt / Không đạt trên ứng dụng) | Cán bộ kiểm tra ghi nhận |
-| **4. Danh sách Vi phạm & Biện pháp xử lý**<br>- Mô tả hành vi vi phạm cụ thể<br>- Căn cứ pháp lý (Điều/Khoản NĐ 106/2025)<br>- Thời hạn yêu cầu khắc phục (Deadline)<br>- Tạm đình chỉ / Yêu cầu ngừng hoạt động | `Violation.description`<br>`Violation.legalBasis`<br>`Violation.deadline`<br>`Violation.severity` (`MINOR`/`MAJOR`/`CRITICAL`)<br>`Inspection.remediationDeadline` | **Phát sinh trong lần kiểm tra**<br>(Tự động trích xuất từ các tiêu chí bị đánh giá `FAIL`) | Lãnh đạo PCCC ký quyết định |
-| **5. Kết luận & Chữ ký xác nhận**<br>- Kết luận chung: Đạt / Tồn tại vi phạm<br>- Ý kiến của Đại diện cơ sở<br>- Chữ ký Cán bộ lập biên bản<br>- Chữ ký & Đóng dấu Lãnh đạo phê duyệt | `Inspection.result` (`PASSED`/`FAILED`)<br>`Inspection.conclusion`<br>`Inspection.status` (`SUBMITTED` -> `APPROVED`)<br>`Inspection.approvedById`, `Inspection.approvedAt`<br>`Inspection.pdfHash` (Mã QR SHA-256) | **Xác nhận kết quả**<br>(Quy trình ký số / duyệt biên bản điện tử) | 1. Chủ cơ sở ký nhận<br>2. Cán bộ lập biên bản ký<br>3. Lãnh đạo PCCC duyệt chốt |
+| Mã Mẫu | Tên Biểu Mẫu | Chủ thể thực hiện | Mục đích & Chu kỳ | Tương tác trên Hệ thống G1.8 |
+| :---: | :--- | :--- | :--- | :--- |
+| **PC01** | **Phiếu thông tin cơ sở phục vụ quản lý về PCCC & CNCH** | Chủ cơ sở khai báo / Cán bộ PC07 số hóa | Thu thập hồ sơ định danh ban đầu khi đưa cơ sở vào diện quản lý hoặc thay đổi quy mô. | Tự động sinh từ bảng `Facility`, `FacilityType`, `Document` & `Equipment`. Hỗ trợ nhập hàng loạt qua Excel (FR-13). |
+| **PC02** | **Biên bản tự kiểm tra an toàn PCCC** | Người đứng đầu cơ sở (`OWNER`) tự tổ chức | Tự rà soát an toàn định kỳ (tháng/quý) và lưu trữ hồ sơ PCCC tại chỗ. | Doanh nghiệp thực hiện trên Cổng Doanh nghiệp (`/doanh-nghiep`), tự đánh giá 16 tiêu chí, tự lên kế hoạch bảo trì thiết bị (không phạt VPHC). |
+| **PC03** | **Biên bản kiểm tra an toàn PCCC** | Đoàn kiểm tra Công an PCCC (`INSPECTOR`) | Cơ quan chức năng kiểm tra định kỳ (1–2 năm/lần) hoặc đột xuất. | Cán bộ lập tại hiện trường (FR-06), Lãnh đạo duyệt (FR-07), tự sinh `Violation` khi `FAIL`, trigger tính rủi ro FR-03, xuất PDF có QR SHA-256 (FR-15). |
+
+---
+
+### 5.2. Bảng Bóc tách Chi tiết Biểu mẫu PC01 & PC02
+
+#### A. Mẫu PC01 — Phiếu Thông Tin Cơ Sở
+* **1. Thông tin định danh:** Tên cơ sở, mã số thuế, họ tên người đại diện pháp luật, số CCCD/CMND, điện thoại, email $\rightarrow$ Lưu tại `Facility.name`, `Facility.ownerName`, `Facility.ownerPhone`, `User` (role `OWNER`).
+* **2. Địa điểm & Tọa độ:** Số nhà, tên đường, phường/xã, quận/huyện, tọa độ địa lý GPS $\rightarrow$ Lưu tại `Facility.address`, `ward`, `district`, `province`, `lat`, `lng` (chuẩn PostGIS không gian).
+* **3. Quy mô kiến trúc & Công năng:** Loại hình cơ sở (`FacilityType`), diện tích đất, tổng diện tích sàn (`areaM2`), số tầng nổi (`floors`), số tầng hầm, chiều cao (`heightM`), bậc chịu lửa $\rightarrow$ Thuộc tính bảng `Facility`.
+* **4. Hồ sơ văn bản pháp lý PCCC:** Giấy chứng nhận thẩm duyệt thiết kế, văn bản nghiệm thu về PCCC, phương án chữa cháy được phê duyệt $\rightarrow$ Bảng `Document` (`docType: DESIGN_APPROVAL, ACCEPTANCE, FIRE_PLAN`).
+* **5. Phương tiện PCCC trang bị:** Hệ thống báo cháy tự động, hệ thống chữa cháy vách tường, sprinkler, số lượng bình chữa cháy $\rightarrow$ Bảng `Equipment` (số lượng, vị trí, tình trạng).
+* **6. Lực lượng PCCC tại chỗ:** Đội PCCC cơ sở/chuyên ngành, số lượng đội viên đã qua tập huấn nghiệp vụ $\rightarrow$ Quản trị trong hồ sơ `Facility`.
+
+#### B. Mẫu PC02 — Biên Bản Tự Kiểm Tra An Toàn PCCC
+* **1. Cơ quan/Doanh nghiệp tự kiểm tra:** Tự động điền từ thông tin `Facility` đã đăng ký.
+* **2. Thời điểm tự kiểm tra:** Ghi nhận `startedAt` và `finishedAt` khi chủ cơ sở mở phiếu trên ứng dụng.
+* **3. Thành phần làm việc:** Người đứng đầu cơ sở (hoặc người được ủy quyền), Đội trưởng Đội PCCC cơ sở, Cán bộ phụ trách an toàn $\rightarrow$ Lưu mảng đối tượng tham gia.
+* **4. Kết quả tự rà soát 16 tiêu chí:** Tự chấm Đạt/Không đạt/Không áp dụng (`InspectionItem`).
+* **5. Tồn tại tự phát hiện & Biện pháp tự khắc phục:** Bình chữa cháy tụt áp, đèn sự cố hỏng $\rightarrow$ Tự động chuyển trạng thái `Equipment.status = NEEDS_MAINTENANCE` để lên lịch nạp sạc/thay mới (phân biệt rõ với Vi phạm hành chính do Công an xử phạt).
+* **6. Ký lưu hồ sơ:** Người đứng đầu cơ sở ký xác nhận và tải lên bản PDF lưu tại mục Hồ sơ PCCC điện tử.
+
+---
+
+### 5.3. Bảng Đối Chiếu Chi Tiết Từng Vị Trí Trên Biểu Mẫu Trọng Tâm PC03 (Theo R5-02)
+
+Dựa trên kết quả rà soát thực tế quy chuẩn biểu mẫu hành chính PC03 (tài liệu kỹ thuật `R5-02.md`), nhóm bóc tách toàn bộ 16 vị trí cần điền trên phôi mẫu đối chiếu với CSDL G1.8:
+
+| Vị trí trên Mẫu PC03 | Thông tin cần điền thực tế | Thuộc tính đối chiếu CSDL G1.8 | Đánh giá mức độ đáp ứng CSDL |
+| :---: | :--- | :--- | :--- |
+| **(1)** | Cơ quan cấp trên trực tiếp | `Inspection.parentAgencyName` *(Đề xuất)* | Cán bộ chọn/nhập (VD: CÔNG AN TP. HỒ CHÍ MINH) |
+| **(2)** | Cơ quan/tổ chức chủ trì kiểm tra | `Inspection.inspectingAgencyName` *(Đề xuất)* | Tự điền đơn vị của cán bộ (VD: PHÒNG CẢNH SÁT PCCC VÀ CNCH) |
+| **Thời điểm bắt đầu** | Hồi … giờ … ngày … tháng … năm … | `Inspection.startedAt` | **Có sẵn 100%**; tự động điền thời gian bắt đầu làm việc |
+| **Nơi kiểm tra** | Tại cơ sở … | `Facility.name` (qua `Inspection.facilityId`) | **Có sẵn 100%**; tự động trích xuất từ hồ sơ cơ sở |
+| **Địa chỉ nơi kiểm tra**| Địa chỉ: … | `Facility.address`, `ward`, `district` | **Có sẵn 100%**; tự động trích xuất từ bảng `Facility` |
+| **Đại diện phía đoàn** | Cơ quan/đơn vị mà người kiểm tra đại diện | Tái sử dụng đơn vị chủ trì (2) | **Có sẵn**; gắn theo tài khoản cán bộ |
+| **Cán bộ kiểm tra** | Ông/bà …; chức vụ … (phía đoàn) | `Inspection.inspectorId` $\rightarrow$ `User.fullName` | **Có sẵn họ tên**; chức vụ lấy từ `User.role` hoặc chức danh |
+| **Thành viên đoàn** | Các thành viên khác và chức vụ | `Inspection.attendees` (Mảng cán bộ cùng đi) | **Có sẵn trong thiết kế**; lưu danh sách họ tên, chức danh |
+| **(3)** | Tên đối tượng được kiểm tra | `Facility.name` | **Có sẵn 100%**; tự động điền |
+| **(4)** | Tổ chức/cá nhân trực tiếp quản lý | `Facility.ownerName`, `ownerUserId` | **Có sẵn 100%**; người đứng đầu cơ sở |
+| **Đại diện cơ sở** | Ông/bà …; chức vụ … (phía cơ sở) | `Inspection.representativeName`, `representativeTitle` | **Có sẵn trong thiết kế**; ghi nhận người trực tiếp làm việc |
+| **(5) - Cơ sở trình bày** | Ý kiến cơ sở về công tác PCCC | `Inspection.facilityStatement` *(Đề xuất)* | Cán bộ ghi nhận tóm tắt nội dung báo cáo của cơ sở |
+| **(5) - Kết quả kiểm tra**| Tình trạng 16 tiêu chí, sơ hở, vi phạm | `InspectionItem.status`, `Violation.description` | **Có sẵn 100%**; tổng hợp tự động từ kết quả chấm checklist |
+| **(5) - Khắc phục cũ** | Kết quả khắc phục kiến nghị lần trước | `Violation.status = RESOLVED`, `resolutionNote` | **Có sẵn 100%**; trích xuất lịch sử vi phạm đã đóng |
+| **(6) - Kiến nghị** | Biện pháp yêu cầu cơ sở thực hiện | `Inspection.recommendation`, `remediationDeadline`| **Có sẵn 100%**; cán bộ nhập nội dung chỉ đạo khắc phục |
+| **Thời điểm hoàn tất** | Biên bản lập xong hồi … giờ … ngày … | `Inspection.finishedAt` *(hoặc `submittedAt`)* | **Có sẵn**; ghi nhận thời điểm hoàn tất và ký biên bản |
+| **Số trang, số bản** | Gồm … trang, lập thành … bản | Hệ thống tự đếm khi dàn trang PDF | Không cần thêm cột DB; tự tính toán khi render PDF |
+| **Vị trí ký (7)(8)(9)** | Đại diện cơ sở, người liên quan, đoàn KT | Chừa chỗ ký trên bản in / Gắn mã QR SHA-256 | Đạt chuẩn thể thức hành chính Nhà nước |
+
+---
+
+### 5.4. Ví dụ Thực Tế Minh Họa Phôi In PC03 Chuẩn: Công ty CP Sản xuất Nhựa Duy Tân
+
+Dựa trên dataset thực tế của nhóm tại địa bàn TP.HCM (Mã cơ sở: **`CS-HCM-BTA-001`**, Địa chỉ: **298 Hồ Học Lãm, Phường An Lạc, Quận Bình Tân**), mẫu in biên bản PC03 được kết xuất tự động như sau:
+
+```text
+       CÔNG AN TP. HỒ CHÍ MINH                  CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
+PHÒNG CẢNH SÁT PCCC VÀ CNCH                     Độc lập - Tự do - Hạnh phúc
+         ─────────────                                   ─────────────
+
+                                 BIÊN BẢN KIỂM TRA
+                           Về phòng cháy, chữa cháy
+                                 ─────────────
+
+Hồi 08 giờ 30 ngày 19 tháng 11 năm 2026, tại Công ty Cổ phần Sản xuất Nhựa Duy Tân.
+Địa chỉ: 298 Hồ Học Lãm, phường An Lạc, quận Bình Tân, Thành phố Hồ Chí Minh.
+Chúng tôi gồm:
+Đại diện: Phòng Cảnh sát PCCC và CNCH – Công an Thành phố Hồ Chí Minh
+- Ông: NGUYỄN VĂN A   - Chức vụ: Đội trưởng – Trưởng đoàn kiểm tra
+- Bà:  TRẦN THỊ B     - Chức vụ: Cán bộ Đội Công tác PCCC
+Đã tiến hành kiểm tra về phòng cháy, chữa cháy đối với: Công ty Cổ phần Sản xuất Nhựa Duy Tân.
+Đại diện: Công ty Cổ phần Sản xuất Nhựa Duy Tân
+- Ông: LÊ VĂN C       - Chức vụ: Tổng Giám đốc
+- Bà:  PHẠM THỊ D     - Chức vụ: Trưởng phòng Hành chính – An toàn
+
+1. Nội dung và kết quả kiểm tra:
+Đại diện Công ty trình bày tóm tắt việc thực hiện quy định PCCC. Đoàn kiểm tra đối soát thực tế 16 tiêu chí:
+- Hệ thống báo cháy tự động, họng nước chữa cháy vách tường: ĐẠT
+- Lối thoát nạn, khoảng cách ngăn cháy: ĐẠT
+- Tồn tại vi phạm: 04 bình chữa cháy bột ABC 8kg tại xưởng ép định hình đã hết hạn kiểm định áp suất (Không đạt Tiêu chí TC-04; Căn cứ Khoản 2 Điều 10 Nghị định 106/2025/NĐ-CP).
+
+2. Kiến nghị và biện pháp xử lý:
+- Yêu cầu người đứng đầu cơ sở tổ chức nạp sạc, kiểm định lại toàn bộ bình chữa cháy hết hạn; hoàn thành trước ngày 26/11/2026 và nộp ảnh minh chứng khắc phục qua Cổng Doanh nghiệp.
+
+Biên bản lập xong hồi 11 giờ 30 cùng ngày, gồm 02 trang, lập thành 03 bản, mỗi bên giữ 01 bản.
+[Kèm Mã QR SHA-256 Xác Thực Tính Toàn Vẹn Biên Bản Điện Tử - FR-15]
+
+   ĐẠI DIỆN CƠ SỞ                    NGƯỜI CÓ LIÊN QUAN                ĐẠI DIỆN ĐOÀN KIỂM TRA
+ (Ký, đóng dấu, ghi rõ họ tên)       (Ký, ghi rõ họ tên)           (Ký, ghi rõ họ tên, chức vụ)
+          LÊ VĂN C                       PHẠM THỊ D                         NGUYỄN VĂN A
+```
 
 ---
 

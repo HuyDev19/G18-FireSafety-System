@@ -217,9 +217,16 @@ model Inspection {
   approvedBy          User?              @relation("ApproverUser", fields: [approvedById], references: [id])
   approvedAt          DateTime?
   reviewNote          String?
-  attendees           String[]           // Danh sách cán bộ trong đoàn kiểm tra (Mẫu PC03)
+  attendees           String[]           // Danh sách cán bộ trong đoàn kiểm tra (Mẫu PC03: họ tên, chức danh)
   representativeName  String?            // Họ tên người đại diện cơ sở tham gia làm việc
   representativeTitle String?            // Chức vụ của người đại diện cơ sở
+  // Các trường mở rộng kết xuất phôi in PC03 (Theo nghiên cứu R5-02 của Role 5, triển khai Tuần 8):
+  parentAgencyName    String?            // (1) Tên cơ quan cấp trên trực tiếp (VD: CÔNG AN TP. HỒ CHÍ MINH)
+  inspectingAgencyName String?           // (2) Tên cơ quan chủ trì kiểm tra (VD: PHÒNG CẢNH SÁT PCCC VÀ CNCH)
+  facilityStatement   String?            // (5) Nội dung cơ sở trình bày về công tác PCCC
+  previousRemedyResult String?           // (5) Kết quả khắc phục tồn tại, kiến nghị các lần kiểm tra trước
+  finishedAt          DateTime?          // Thời điểm hoàn tất biên bản tại hiện trường (phục vụ in PC03)
+  pdfHash             String?            // Mã hash SHA-256 xác thực biên bản điện tử kèm QR (FR-15)
   items               InspectionItem[]
   violations          Violation[]
   riskHistories       RiskScoreHistory[]
