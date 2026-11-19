@@ -73,7 +73,7 @@
 ====================================================================================================
   +-----------------------------------------+   +---------------------------+   +-------------------------+
   | CLOUD POSTGRESQL 16 + POSTGIS           |   | MINIO / CLOUD S3 STORAGE  |   | GITHUB ACTIONS CI/CD    |
-  | • Lưu 14 Bảng CSDL dùng chung 5 Roles   |   | • Lưu PDF Hồ sơ pháp lý   |   | • Tự động Lint, Build,  |
+  | • Lưu 16 Bảng CSDL dùng chung 5 Roles   |   | • Lưu PDF Hồ sơ pháp lý   |   | • Tự động Lint, Build,  |
   | • Neon Serverless Postgres (sslmode=require)     |   | • Lưu Ảnh minh chứng <=10M|   |   Unit Test mỗi khi PR  |
   +-----------------------------------------+   +---------------------------+   +-------------------------+
 ```
@@ -110,8 +110,8 @@ G18-FireSafety-System/
 |
 \-- backend-api/                      # (Chạy ở cổng http://localhost:3000)
     |-- prisma/
-    |   |-- schema.prisma             # [Role 3 giữ khóa] Khai báo 14 bảng Database chuẩn (bổ sung MFA & Audit)
-    |   \-- seed.ts                   # [Role 5 - Fullstack] Script nạp danh mục, checklist & 40 cơ sở mẫu
+    |   |-- schema.prisma             # [Role 3 giữ khóa] Khai báo 16 bảng Database chuẩn (bổ sung MFA, Audit, RiskHistory & Evidence)
+    |   \-- seed.ts                   # [Role 5 - Fullstack] Script nạp danh mục, checklist, kịch bản mẫu & 40 cơ sở
     |-- src/
     |   |-- common/                   # [Role 3 giữ khóa] Guards (@RolesGuard, @MfaGuard), Filters, Decorators
     |   |-- jobs/                     # [Role 4 - BE 2] Cronjob quét cảnh báo 06:00 sáng (FR-14)
@@ -166,6 +166,7 @@ MINIO_PORT=9000
 MINIO_ACCESS_KEY=minio_admin
 MINIO_SECRET_KEY=password123
 MINIO_BUCKET_NAME=pccc-documents
+MINIO_PUBLIC_URL=http://localhost:9000
 ```
 
 ---

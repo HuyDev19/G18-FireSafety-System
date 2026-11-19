@@ -65,6 +65,7 @@ model User {
   approvedInspections Inspection[]         @relation("ApproverUser")
   auditLogs           AuditLog[]
   notifications       Notification[]
+  uploadedEvidences   ViolationEvidence[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   deletedAt           DateTime?            // Xóa mềm
@@ -117,6 +118,7 @@ model Facility {
   incidents           Incident[]
   documents           Document[]
   riskAssessments     RiskAssessment[]
+  riskScoreHistories  RiskScoreHistory[]
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   deletedAt           DateTime?            // Xóa mềm
@@ -325,6 +327,43 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([userId, createdAt])
 }
+
+// 15. Bảng Lịch sử Biến động Điểm Rủi ro (FR-03 Trend Chart)
+model RiskScoreHistory {
+  id           String      @id @default(uuid())
+  facilityId   String
+  facility     Facility    @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  inspectionId String?
+  inspection   Inspection? @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
+  scoreBefore  Int
+  scoreAfter   Int
+  triggerEvent String      // INSPECTION_APPROVED, VIOLATION_RESOLVED, EQUIPMENT_STATUS_CHANGED, MANUAL_OVERRIDE
+  changeReason String?
+  recordedAt   DateTime    @default(now())
+
+  @@index([facilityId, recordedAt])
+  @@index([triggerEvent])
+}
+
+// 16. Bảng Quản lý File Minh chứng Khắc phục Vi phạm (FR-07, FR-08)
+model ViolationEvidence {
+  id              String    @id @default(uuid())
+  violationId     String
+  violation       Violation @relation(fields: [violationId], references: [id], onDelete: Cascade)
+  fileUrl         String    // Object key hoặc đường dẫn file trên MinIO
+  fileName        String
+  fileSize        Int       @default(0)
+  mimeType        String    @default("image/jpeg")
+  uploadedById    String
+  uploadedBy      User      @relation(fields: [uploadedById], references: [id])
+  uploadedByRole  RoleCode
+  accessLevel     String    @default("OFFICER_AND_OWNER") // OFFICER_ONLY, OFFICER_AND_OWNER, PUBLIC_AUDIT
+  note            String?
+  createdAt       DateTime  @default(now())
+
+  @@index([violationId])
+  @@index([uploadedById])
+}
 ```
 
 ---
@@ -409,5 +448,30 @@ export interface PublicFacilityInfo {
   riskLevel: RiskLevelCode;
   complianceStatus: 'COMPLIANT' | 'NEEDS_REMEDIATION' | 'UNINSPECTED';
   lastInspectedAt?: string;
+}
+
+export interface RiskScoreHistoryItem {
+  id: string;
+  facilityId: string;
+  inspectionId?: string | null;
+  scoreBefore: number;
+  scoreAfter: number;
+  triggerEvent: string;
+  changeReason?: string | null;
+  recordedAt: string;
+}
+
+export interface ViolationEvidenceItem {
+  id: string;
+  violationId: string;
+  fileUrl: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  uploadedById: string;
+  uploadedByRole: RoleCode;
+  accessLevel: string;
+  note?: string | null;
+  createdAt: string;
 }
 ```

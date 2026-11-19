@@ -1,6 +1,6 @@
 # 06. BỘ SƠ ĐỒ KIẾN TRÚC, NGHIỆP VỤ & CƠ SỞ DỮ LIỆU HỆ THỐNG G1.8 (PCCC)
 
-Tài liệu này tổng hợp 5 sơ đồ chuẩn hóa dựa trên cấu trúc thư mục, 14 bảng Prisma và 16 module chức năng (`FR-01` -> `FR-16`) của dự án, tuân thủ nghiêm ngặt mô hình an toàn thông tin GovTech 3 phân vùng mạng và bảo mật tài khoản đặc quyền.
+Tài liệu này tổng hợp 5 sơ đồ chuẩn hóa dựa trên cấu trúc thư mục, 16 bảng Prisma và 16 module chức năng (`FR-01` -> `FR-16`) của dự án, tuân thủ nghiêm ngặt mô hình an toàn thông tin GovTech 3 phân vùng mạng và bảo mật tài khoản đặc quyền.
 
 *(Mẹo: Cài extension **"Markdown Preview Mermaid Support"** rồi bấm **`Ctrl + Shift + V`** để xem trực tiếp sơ đồ đồ họa).*
 
@@ -58,7 +58,7 @@ flowchart TB
     %% ==================== TẦNG 4: INFRASTRUCTURE ====================
     subgraph T4 ["TẦNG 4: HẠ TẦNG CLOUD & BẢO MẬT (PostgreSQL + PostGIS & S3 Storage)"]
         direction LR
-        PG_DB[("☁️ Cloud PostgreSQL 16 + PostGIS<br/>Neon Serverless Postgres (14 Bảng CSDL dùng chung)")]
+        PG_DB[("☁️ Cloud PostgreSQL 16 + PostGIS<br/>Neon Serverless Postgres (16 Bảng CSDL dùng chung)")]
         MINIO_S3[("📦 MinIO / S3 Cloud Storage<br/>Bucket: pccc-documents (PDF & Ảnh <= 10MB)")]
     end
 
@@ -239,17 +239,6 @@ sequenceDiagram
         DB-->>-BE: Transaction hoàn tất
         BE-->>-FE: Thông báo nghiệm thu thành công! Điểm rủi ro cơ sở hạ về 40đ (An toàn)
     end
-
-    rect rgb(240, 253, 244)
-        Note over FE5,LDR: BƯỚC 3: LÃNH ĐẠO PHÊ DUYỆT & KHÓA BIÊN BẢN (FR-06, FR-12, FR-15)
-        LDR->>+FE5: Mở xem biên bản chờ duyệt
-        LDR->>FE5: Bấm "Phê duyệt"
-        FE5->>+BE4: PATCH /api/inspections/:id/approve
-        BE4->>+DB: Cập nhật Inspection (status = APPROVED), khóa chỉnh sửa & ghi AuditLog
-        DB-->>-BE4: Xác nhận lưu
-        BE4-->>-FE5: Trả về kết quả đã duyệt
-        FE5-->>-LDR: Mở khóa nút "In Biên bản PDF kèm mã QR" (FR-15)
-    end
 ```
 
 ---
@@ -299,8 +288,8 @@ flowchart TD
 
 ---
 
-## 5. Sơ đồ Quan hệ Thực thể 14 Bảng Cơ sở Dữ liệu (Prisma ERD Diagram)
-*Khớp 100% với 14 model trong `03_CSDL_PRISMA_VA_TYPES.md`, tích hợp MFA TOTP và cấp phát định danh.*
+## 5. Sơ đồ Quan hệ Thực thể 16 Bảng Cơ sở Dữ liệu (Prisma ERD Diagram)
+*Khớp 100% với 16 model trong `03_CSDL_PRISMA_VA_TYPES.md`, tích hợp MFA TOTP, cấp phát định danh, RiskScoreHistory và ViolationEvidence.*
 
 ```mermaid
 erDiagram
@@ -310,6 +299,7 @@ erDiagram
     User ||--o{ Inspection : "inspector / approvedBy"
     User ||--o{ Notification : "receives"
     User ||--o{ AuditLog : "performs"
+    User ||--o{ ViolationEvidence : "uploads"
 
     FacilityType ||--o{ Facility : "classifies"
 
@@ -320,11 +310,14 @@ erDiagram
     Facility ||--o{ Violation : "commits"
     Facility ||--o{ Incident : "suffers"
     Facility ||--o{ Document : "stores"
+    Facility ||--o{ RiskScoreHistory : "tracks_trend"
 
     InspectionSchedule ||--o| Inspection : "generates"
     Inspection ||--o{ InspectionItem : "contains"
     InspectionCriteria ||--o{ InspectionItem : "defines"
     Inspection ||--o{ Violation : "detects"
+    Inspection ||--o{ RiskScoreHistory : "causes"
+    Violation ||--o{ ViolationEvidence : "has_evidence"
 
     User {
         string id PK
@@ -463,5 +456,26 @@ erDiagram
         string action
         string entity
         string entityId
+    }
+
+    RiskScoreHistory {
+        string id PK
+        string facilityId FK
+        string inspectionId FK
+        int scoreBefore
+        int scoreAfter
+        string triggerEvent "INSPECTION_APPROVED | VIOLATION_RESOLVED"
+        datetime recordedAt
+    }
+
+    ViolationEvidence {
+        string id PK
+        string violationId FK
+        string fileUrl "MinIO S3 Key"
+        string fileName
+        string uploadedById FK
+        RoleCode uploadedByRole "OWNER | INSPECTOR"
+        string accessLevel "OFFICER_AND_OWNER | OFFICER_ONLY"
+        datetime createdAt
     }
 ```
