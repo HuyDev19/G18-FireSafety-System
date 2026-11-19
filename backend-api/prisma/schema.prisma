@@ -53,6 +53,7 @@ model User {
   approvedInspections Inspection[]         @relation("ApproverUser")
   auditLogs           AuditLog[]
   notifications       Notification[]
+  uploadedEvidences   ViolationEvidence[]  @relation("UploadedEvidences")
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   deletedAt           DateTime?            // Xóa mềm
@@ -242,6 +243,7 @@ model Violation {
   resolvedAt        DateTime?
   resolutionNote    String?
   evidenceImageUrls String[]
+  evidences         ViolationEvidence[]
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
@@ -329,4 +331,24 @@ model RiskScoreHistory {
 
   @@index([facilityId, recordedAt])
   @@index([triggerEvent])
+}
+
+// 16. Bảng Quản lý File Minh chứng Khắc phục Vi phạm (FR-07, FR-08)
+model ViolationEvidence {
+  id              String    @id @default(uuid())
+  violationId     String
+  violation       Violation @relation(fields: [violationId], references: [id], onDelete: Cascade)
+  fileUrl         String    // Object key trên MinIO S3
+  fileName        String
+  fileSize        Int       @default(0)
+  mimeType        String    @default("image/jpeg")
+  uploadedById    String
+  uploadedBy      User      @relation("UploadedEvidences", fields: [uploadedById], references: [id])
+  uploadedByRole  RoleCode
+  accessLevel     String    @default("OFFICER_AND_OWNER") // OFFICER_ONLY, OFFICER_AND_OWNER, PUBLIC_AUDIT
+  note            String?
+  createdAt       DateTime  @default(now())
+
+  @@index([violationId])
+  @@index([uploadedById])
 }

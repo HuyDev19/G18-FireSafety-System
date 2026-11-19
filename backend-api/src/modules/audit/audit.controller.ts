@@ -8,6 +8,7 @@ import { AuditService } from './audit.service';
 import { QueryAuditDto } from './dto/query-audit.dto';
 
 @ApiTags('Audit Logs (FR-12)')
+@ApiBearerAuth('BearerAuth')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('audit-logs')
