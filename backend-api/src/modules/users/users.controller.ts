@@ -22,6 +22,7 @@ import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { UsersService } from './users.service';
 
 @ApiTags('Users & Identity Provisioning (FR-01)')
+@ApiBearerAuth('BearerAuth')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('users')
