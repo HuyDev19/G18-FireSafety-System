@@ -437,7 +437,7 @@ export function UserManagementPage() {
     dismissSuccessToast();
     setModalError(null);
     setError(null);
-    if (payload.facilityId.startsWith("demo-")) {
+    if (facilityDemoEnabled) {
       setModalError(
         "Chế độ demo: thao tác đã được mô phỏng. Không tạo tài khoản thật.",
       );
