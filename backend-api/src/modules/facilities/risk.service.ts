@@ -1,11 +1,14 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { RiskLevelCode } from '@prisma/client';
+import { RiskLevelCode, RoleCode } from '@prisma/client';
+import { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { isAreaAllowed, parseAreaCodes } from '../../common/utils/area.util';
 import { AuditService } from '../audit/audit.service';
 
 export interface TriggerApprovedResult {
@@ -264,9 +267,53 @@ export class RiskService {
   }
 
   /**
-   * Lấy lịch sử biến động điểm rủi ro phục vụ vẽ biểu đồ Trend Chart
+   * Lấy lịch sử biến động điểm rủi ro phục vụ vẽ biểu đồ Trend Chart (kèm kiểm soát IDOR)
    */
-  async getRiskScoreHistories(facilityId: string) {
+  async getRiskScoreHistories(facilityId: string, currentUser?: AuthenticatedUser) {
+    if (currentUser) {
+      const facility = await this.prisma.facility.findFirst({
+        where: { id: facilityId, deletedAt: null },
+        select: {
+          id: true,
+          district: true,
+          ownerUserId: true,
+          assignedInspectorId: true,
+        },
+      });
+
+      if (!facility) {
+        throw new NotFoundException(`Không tìm thấy cơ sở có ID: ${facilityId}`);
+      }
+
+      if (currentUser.role === RoleCode.OWNER && facility.ownerUserId !== currentUser.id) {
+        throw new ForbiddenException('Bạn không có quyền xem lịch sử rủi ro của cơ sở khác');
+      }
+
+      if (currentUser.role === RoleCode.INSPECTOR) {
+        const isAssigned = facility.assignedInspectorId === currentUser.id;
+        const isAllowedArea = isAreaAllowed(
+          currentUser.areaCode,
+          facility.district,
+          currentUser.role,
+        );
+        if (!isAssigned && !isAllowedArea) {
+          throw new ForbiddenException(
+            'Bạn không có quyền xem lịch sử rủi ro cơ sở ngoài địa bàn phụ trách',
+          );
+        }
+      } else if (
+        currentUser.role === RoleCode.LEADER &&
+        currentUser.areaCode &&
+        !parseAreaCodes(currentUser.areaCode).includes('ALL')
+      ) {
+        if (!isAreaAllowed(currentUser.areaCode, facility.district, currentUser.role)) {
+          throw new ForbiddenException(
+            'Lãnh đạo không có quyền xem lịch sử rủi ro cơ sở ngoài địa bàn phụ trách',
+          );
+        }
+      }
+    }
+
     return this.prisma.riskScoreHistory.findMany({
       where: { facilityId },
       orderBy: { recordedAt: 'asc' },

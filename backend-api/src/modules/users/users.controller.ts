@@ -69,8 +69,11 @@ export class UsersController {
   @Get(':id')
   @Roles(RoleCode.ADMIN, RoleCode.LEADER, RoleCode.INSPECTOR)
   @ApiOperation({ summary: 'Xem chi tiết tài khoản người dùng' })
-  async findById(@Param('id') id: string) {
-    return this.usersService.findById(id);
+  async findById(
+    @CurrentUser() currentUser: AuthenticatedUser,
+    @Param('id') id: string,
+  ) {
+    return this.usersService.findById(currentUser, id);
   }
 
   @Patch(':id/status')
