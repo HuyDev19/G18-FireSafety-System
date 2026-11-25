@@ -10,6 +10,12 @@ import {
 } from 'lucide-react';
 import buildingImage from '../../assets/pccc-building-cutaway.png';
 import pcccLogo from '../../assets/pccc-logo.png';
+import {
+  clearPendingMfaToken,
+  getInternalLoginErrorMessage,
+  loginInternal,
+  retainPendingMfaToken,
+} from './authApi';
 import './loginPage.css';
 
 type Portal = 'officer' | 'business';
@@ -49,10 +55,13 @@ export function LoginPage() {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [message, setMessage] = useState('');
   const [errors, setErrors] = useState<LoginErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const tabRefs = useRef<Record<Portal, HTMLButtonElement | null>>({ officer: null, business: null });
   const emailInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
   const focusErrorAfterRender = useRef(false);
+  const activeLoginRequest = useRef<AbortController | null>(null);
+  const loginRequestId = useRef(0);
   const copy = portalCopy[portal];
 
   useEffect(() => {
@@ -62,13 +71,24 @@ export function LoginPage() {
     else if (errors.password) passwordInputRef.current?.focus();
   }, [errors]);
 
+  useEffect(() => () => {
+    loginRequestId.current += 1;
+    activeLoginRequest.current?.abort();
+    activeLoginRequest.current = null;
+  }, []);
+
   function selectPortal(nextPortal: Portal) {
     if (nextPortal === portal) return;
+    loginRequestId.current += 1;
+    activeLoginRequest.current?.abort();
+    activeLoginRequest.current = null;
+    clearPendingMfaToken();
     setPortal(nextPortal);
     setPassword('');
     setPasswordVisible(false);
     setErrors({});
     setMessage('');
+    setIsSubmitting(false);
   }
 
   function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
@@ -80,6 +100,7 @@ export function LoginPage() {
   }
 
   function handleEmailChange(value: string) {
+    clearPendingMfaToken();
     setEmail(value);
     setMessage('');
     setErrors((currentErrors) => currentErrors.email
@@ -88,6 +109,7 @@ export function LoginPage() {
   }
 
   function handlePasswordChange(value: string) {
+    clearPendingMfaToken();
     setPassword(value);
     setMessage('');
     setErrors((currentErrors) => currentErrors.password
@@ -110,6 +132,7 @@ export function LoginPage() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (activeLoginRequest.current) return;
 
     const normalizedEmail = email.trim();
     const emailError = validateEmail(normalizedEmail);
@@ -128,14 +151,48 @@ export function LoginPage() {
       return;
     }
 
-    setMessage('Chức năng xác thực sẽ được tích hợp ở bước tiếp theo. Thông tin đăng nhập chưa được gửi.');
+    if (portal === 'business') {
+      setMessage('Đăng nhập Cổng Doanh nghiệp sẽ được tích hợp ở bước tiếp theo. Thông tin chưa được gửi.');
+      return;
+    }
+
+    clearPendingMfaToken();
+    const controller = new AbortController();
+    const requestId = ++loginRequestId.current;
+    activeLoginRequest.current = controller;
+    setIsSubmitting(true);
+    setMessage('Đang xác thực thông tin đăng nhập.');
+
+    void submitInternalLogin(normalizedEmail, password, controller, requestId);
+  }
+
+  async function submitInternalLogin(emailValue: string, passwordValue: string, controller: AbortController, requestId: number) {
+    try {
+      const result = await loginInternal({ email: emailValue, password: passwordValue }, controller.signal);
+      if (requestId !== loginRequestId.current || controller.signal.aborted || portal !== 'officer') return;
+
+      if (result.kind === 'mfa-required') {
+        retainPendingMfaToken(result.tempToken);
+        setMessage('Mật khẩu đã được xác thực. Vui lòng tiếp tục bằng mã OTP 2FA.');
+      } else {
+        clearPendingMfaToken();
+        setMessage('Thông tin đăng nhập đã được xác thực. Phiên đăng nhập sẽ được thiết lập ở bước tiếp theo.');
+      }
+    } catch (error) {
+      if (requestId !== loginRequestId.current || controller.signal.aborted || portal !== 'officer') return;
+      setMessage(getInternalLoginErrorMessage(error));
+    } finally {
+      if (requestId === loginRequestId.current) {
+        activeLoginRequest.current = null;
+        setIsSubmitting(false);
+      }
+    }
   }
 
   return (
     <main className="login-page">
       <div className="login-shell">
         <section className="login-intro" aria-label="Giới thiệu hệ thống">
-          <div className="login-intro-copy">
             <a className="login-brand" href="/login" aria-label="Quản lý cơ sở PCCC, trang đăng nhập">
               <span className="login-brand-mark" aria-hidden="true">
                 <img src={pcccLogo} alt="" />
@@ -143,6 +200,7 @@ export function LoginPage() {
               <span className="login-brand-name">QUẢN LÝ CƠ SỞ <b>PCCC</b></span>
             </a>
 
+          <div className="login-intro-copy">
             <div className="login-intro-content">
               <h2 className="login-intro-title">Chủ động phòng cháy,<br /><span>sẵn sàng chữa cháy.</span></h2>
             </div>
@@ -193,7 +251,7 @@ export function LoginPage() {
                 <p>{copy.description}</p>
               </div>
 
-              <form className="login-form" onSubmit={handleSubmit} noValidate>
+              <form className="login-form" onSubmit={handleSubmit} noValidate aria-busy={isSubmitting}>
                 <div className={`login-field${errors.email ? ' has-error' : ''}`}>
                   <label htmlFor="login-email">Email</label>
                   <div className="login-input-wrap">
@@ -224,7 +282,9 @@ export function LoginPage() {
                 </div>
 
                 <div className="login-audience"><ShieldCheck size={16} aria-hidden="true" /><span>{copy.audience}</span></div>
-                <button className="login-submit" type="submit">Đăng nhập <ArrowRight size={17} aria-hidden="true" /></button>
+                <button className="login-submit" type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Đang xác thực...' : <>Đăng nhập <ArrowRight size={17} aria-hidden="true" /></>}
+                </button>
                 <p className="login-status" role="status">{message}</p>
               </form>
             </div>
