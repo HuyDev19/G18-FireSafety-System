@@ -18,6 +18,8 @@ export default function App() {
         {/* Cổng tra cứu công khai cho người dân (Không cần đăng nhập - FR-16) */}
         <Route path="/tra-cuu" element={<PublicLookupPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/admin-portal/login" element={<LoginPage />} />
+        <Route path="/doanh-nghiep/login" element={<LoginPage />} />
 
         {/* Các phân hệ nghiệp vụ nội bộ (Có bảo vệ bởi RBAC Guard) */}
         <Route path="/dashboard" element={<DashboardReportPage />} />
@@ -30,7 +32,7 @@ export default function App() {
         <Route path="/violations-incidents" element={<ViolationIncidentPage />} />
         <Route path="/admin/users" element={<UserManagementPage />} />
 
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
   );
