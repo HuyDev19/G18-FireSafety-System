@@ -67,7 +67,7 @@ interface LoginPageProps {
 }
 
 export function LoginPage({ ownerRoutesProtected = false }: LoginPageProps) {
-  const { pathname } = useLocation();
+  const { pathname, key: locationKey, state: routeState } = useLocation();
   const navigate = useNavigate();
   const hydrated = useAuthHydrated();
   const session = useAuthStore();
@@ -190,7 +190,19 @@ export function LoginPage({ ownerRoutesProtected = false }: LoginPageProps) {
   useLayoutEffect(() => {
     if (!['/login', '/admin-portal/login', '/doanh-nghiep/login'].includes(pathname)) return;
     resetPortal(getLoginPortal(pathname));
-  }, [pathname, resetPortal]);
+    if (routeState?.authNotice === 'password-changed') {
+      setMessage('Đổi mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới.');
+    } else if (routeState?.authNotice === 'session-expired') {
+      setMessage('Phiên đăng nhập đã hết hiệu lực. Vui lòng đăng nhập lại.');
+    }
+  }, [pathname, locationKey, routeState, resetPortal]);
+
+  useLayoutEffect(() => {
+    if (!session.token || session.user?.mustChangePassword === true) {
+      setPassword('');
+      setPasswordVisible(false);
+    }
+  }, [session.token, session.user?.id, session.user?.mustChangePassword]);
 
   function selectPortal(nextPortal: Portal) {
     if (nextPortal === portal) return;

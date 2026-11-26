@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { apiClient } from '../../services/apiClient';
 import type { RoleCode, UserProfile } from '../../types/pccc.types';
+import type { ChangePasswordPayload } from './userManagement.types';
 
 export interface InternalLoginRequest {
   email: string;
@@ -63,6 +64,82 @@ const publicAuthClient = axios.create({
   timeout: apiClient.defaults.timeout ?? 15000,
   headers: { 'Content-Type': 'application/json' },
 });
+
+// Authenticated, session-bound transport: the shared 401 interceptor would log out
+// a NEW session if an old password-change response arrived after a session switch.
+// Always send the initiating session's Bearer token; never use publicAuthClient here.
+const passwordChangeClient = axios.create({
+  baseURL: apiClient.defaults.baseURL,
+  timeout: apiClient.defaults.timeout ?? 15000,
+  headers: { 'Content-Type': 'application/json' },
+});
+
+export class ChangePasswordError extends Error {
+  constructor(readonly code: 'BAD_REQUEST' | 'UNAUTHORIZED' | 'FORBIDDEN' | 'TOO_MANY_REQUESTS'
+    | 'TIMEOUT' | 'NETWORK' | 'SERVER' | 'INVALID_RESPONSE' | 'CANCELED' | 'UNKNOWN',
+    readonly reason?: 'old-password' | 'password-reused') {
+    super(code);
+    this.name = 'ChangePasswordError';
+  }
+}
+
+export async function changeMandatoryPassword(
+  payload: ChangePasswordPayload,
+  accessToken: string,
+  signal: AbortSignal,
+): Promise<void> {
+  if (!accessToken.trim()) throw new ChangePasswordError('UNAUTHORIZED');
+  let response: unknown;
+  try {
+    const result = await passwordChangeClient.patch<unknown>('/auth/change-password', {
+      oldPassword: payload.oldPassword,
+      newPassword: payload.newPassword,
+    }, { signal, headers: { Authorization: `Bearer ${accessToken}` } });
+    // This client has no shared response interceptor: unwrap AxiosResponse once.
+    response = result.data;
+  } catch (error) {
+    if (axios.isCancel(error)) throw new ChangePasswordError('CANCELED');
+    if (axios.isAxiosError(error)) {
+      if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') throw new ChangePasswordError('TIMEOUT');
+      const status = error.response?.status;
+      if (status === 400) {
+        const message = getResponseMessage(error.response?.data).toLocaleLowerCase('vi');
+        throw new ChangePasswordError('BAD_REQUEST', message.includes('hiện tại không đúng')
+          ? 'old-password' : message.includes('trùng mật khẩu') ? 'password-reused' : undefined);
+      }
+      if (status === 401) throw new ChangePasswordError('UNAUTHORIZED');
+      if (status === 403) throw new ChangePasswordError('FORBIDDEN');
+      if (status === 429) throw new ChangePasswordError('TOO_MANY_REQUESTS');
+      if (status === 408) throw new ChangePasswordError('TIMEOUT');
+      if (status !== undefined && status >= 500) throw new ChangePasswordError('SERVER');
+      if (error.request && status === undefined) throw new ChangePasswordError('NETWORK');
+    }
+    throw new ChangePasswordError('UNKNOWN');
+  }
+  if (!isRecord(response) || response.success !== true || !requiredString(response.message)
+    || !isRecord(response.data) || !requiredString(response.data.message)) {
+    throw new ChangePasswordError('INVALID_RESPONSE');
+  }
+}
+
+export function getChangePasswordErrorMessage(error: unknown): string {
+  if (error instanceof ChangePasswordError) {
+    switch (error.code) {
+      case 'BAD_REQUEST':
+        if (error.reason === 'old-password') return 'Mật khẩu hiện tại không đúng. Vui lòng kiểm tra lại.';
+        if (error.reason === 'password-reused') return 'Mật khẩu mới phải khác mật khẩu hiện tại.';
+        return 'Thông tin đổi mật khẩu chưa hợp lệ. Vui lòng kiểm tra lại.';
+      case 'UNAUTHORIZED': return 'Phiên đăng nhập đã hết hiệu lực. Vui lòng đăng nhập lại.';
+      case 'FORBIDDEN': return 'Yêu cầu đổi mật khẩu bị từ chối. Vui lòng liên hệ quản trị viên.';
+      case 'TOO_MANY_REQUESTS': return 'Bạn đã gửi quá nhiều yêu cầu. Vui lòng chờ rồi thử lại.';
+      case 'INVALID_RESPONSE': return 'Phản hồi đổi mật khẩu không hợp lệ. Chưa thể xác nhận kết quả; bạn có thể đăng xuất và thử đăng nhập lại.';
+      case 'NETWORK':
+      case 'TIMEOUT':
+      case 'SERVER': return 'Chưa xác định được kết quả đổi mật khẩu do lỗi kết nối hoặc máy chủ. Bạn có thể đăng xuất và thử đăng nhập lại; không cần tự động gửi lại yêu cầu.';
+    }
+  }
+  return 'Không thể đổi mật khẩu. Vui lòng thử lại hoặc liên hệ quản trị viên.';
+}
 
 function isInternalRole(value: unknown): value is InternalRole {
   return typeof value === 'string' && internalRoles.includes(value as InternalRole);

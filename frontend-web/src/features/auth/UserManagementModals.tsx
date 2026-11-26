@@ -27,6 +27,7 @@ function ModalShell({
   children,
 }: ModalShellProps) {
   const titleId = useId();
+  const descriptionId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
@@ -109,6 +110,7 @@ function ModalShell({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        aria-describedby={descriptionId}
         tabIndex={-1}
       >
         <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
@@ -116,7 +118,7 @@ function ModalShell({
             <h2 id={titleId} className="text-lg font-bold leading-7 text-slate-950">
               {title}
             </h2>
-            <p className="body-copy mt-1 text-slate-500">{description}</p>
+            <p id={descriptionId} className="body-copy mt-1 text-slate-500">{description}</p>
           </div>
           {canClose && (
             <button
@@ -625,6 +627,7 @@ interface ChangePasswordModalProps {
   isSubmitting: boolean;
   error: string | null;
   isMandatory?: boolean;
+  onLogout?: () => void;
   onClose: () => void;
   onSubmit: (payload: ChangePasswordPayload) => Promise<void>;
 }
@@ -656,8 +659,8 @@ function PasswordField({
   error,
 }: PasswordFieldProps) {
   return (
-    <label className="form-label block space-y-2">
-      {label}
+    <div className="form-label block space-y-2">
+      <label htmlFor={id}>{label}</label>
       <span className="relative block">
         <input
           id={id}
@@ -691,7 +694,7 @@ function PasswordField({
           {error}
         </span>
       )}
-    </label>
+    </div>
   );
 }
 
@@ -703,6 +706,7 @@ export function ChangePasswordModal({
   isSubmitting,
   error,
   isMandatory = false,
+  onLogout,
   onClose,
   onSubmit,
 }: ChangePasswordModalProps) {
@@ -771,6 +775,7 @@ export function ChangePasswordModal({
       <form
         noValidate
         onSubmit={handleSubmit}
+        aria-busy={isSubmitting}
         className="space-y-5 px-6 py-6"
       >
         <PasswordField
@@ -873,6 +878,9 @@ export function ChangePasswordModal({
         )}
 
         <div className="flex justify-end gap-3 border-t border-slate-100 pt-5">
+          {isMandatory && onLogout && (
+            <button type="button" onClick={onLogout} className="button-secondary">Đăng xuất</button>
+          )}
           {!isMandatory && (
             <button
               type="button"
