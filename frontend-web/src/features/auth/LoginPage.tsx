@@ -48,6 +48,26 @@ function validatePassword(value: string): string | undefined {
   return value.length === 0 ? 'Vui lòng nhập mật khẩu.' : undefined;
 }
 
+/**
+ * Opt-in only for isolated demo accounts approved for public disclosure.
+ * Every VITE_ value is public in the browser bundle, even when this flag is off.
+ * Never configure shared database/admin credentials here.
+ */
+function getPublicDemoAccount(portal: Portal): { email: string; password?: string } | null {
+  if (import.meta.env.VITE_PUBLIC_DEMO_ENABLED !== 'true') return null;
+  const email: unknown = portal === 'business'
+    ? import.meta.env.VITE_PUBLIC_DEMO_OWNER_EMAIL
+    : import.meta.env.VITE_PUBLIC_DEMO_OFFICER_EMAIL;
+  const password: unknown = portal === 'business'
+    ? import.meta.env.VITE_PUBLIC_DEMO_OWNER_PASSWORD
+    : import.meta.env.VITE_PUBLIC_DEMO_OFFICER_PASSWORD;
+  if (typeof email !== 'string' || validateEmail(email)) return null;
+  return {
+    email: email.trim(),
+    ...(typeof password === 'string' && password.length > 0 ? { password } : {}),
+  };
+}
+
 const portalCopy: Record<Portal, { title: string; description: string; audience: string }> = {
   officer: {
     title: 'Đăng nhập Cổng Cán bộ PCCC',
@@ -240,6 +260,25 @@ export function LoginPage({ ownerRoutesProtected = false }: LoginPageProps) {
     setErrors((currentErrors) => currentErrors.password
       ? { ...currentErrors, password: validatePassword(value) }
       : currentErrors);
+  }
+
+  function fillDemoAccount() {
+    // Guard synchronously too: React may not have painted disabled yet.
+    if (activeLoginRequest.current || isSubmitting || isOtpModalOpen) return;
+    const demo = getPublicDemoAccount(portal);
+    if (!demo) {
+      setMessage(`Chưa có tài khoản demo ${portal === 'business' ? 'Doanh nghiệp' : 'Cán bộ PCCC'} được cấu hình để công khai. Vui lòng liên hệ quản trị viên.`);
+      return;
+    }
+    clearPendingMfaToken();
+    clearVerifiedMfaResult();
+    setEmail(demo.email);
+    setPassword(demo.password ?? '');
+    setPasswordVisible(false);
+    setErrors({});
+    setMessage(demo.password
+      ? 'Đã điền thông tin demo. Bấm Đăng nhập để xác thực như bình thường.'
+      : 'Đã điền email demo. Vui lòng nhập mật khẩu được cấp rồi bấm Đăng nhập.');
   }
 
   function cancelActiveLoginRequest() {
@@ -470,6 +509,10 @@ export function LoginPage({ ownerRoutesProtected = false }: LoginPageProps) {
                 <div className="login-audience"><ShieldCheck size={16} aria-hidden="true" /><span>{copy.audience}</span></div>
                 <button className="login-submit" type="submit" disabled={isSubmitting}>
                   {isSubmitting ? 'Đang xác thực...' : <>Đăng nhập <ArrowRight size={17} aria-hidden="true" /></>}
+                </button>
+                <button className="login-demo-button" type="button" onClick={fillDemoAccount}
+                  disabled={isSubmitting || isOtpModalOpen}>
+                  Tài khoản demo nhanh
                 </button>
                 <p className="login-status" role="status">{message}</p>
               </form>
