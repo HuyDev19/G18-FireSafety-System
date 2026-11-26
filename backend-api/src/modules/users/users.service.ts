@@ -5,12 +5,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { RoleCode } from '@prisma/client';
+import { Prisma, RoleCode } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { isAreaAllowed, normalizeNfc, parseAreaCodes } from '../../common/utils/area.util';
+import { isAreaAllowed, parseAreaCodes } from '../../common/utils/area.util';
 import { AuditService } from '../audit/audit.service';
 import { CreateStaffUserDto } from './dto/create-staff-user.dto';
 import { ProvisionOwnerDto } from './dto/provision-owner.dto';
@@ -77,7 +77,11 @@ export class UsersService {
           'Bạn không có quyền cấp tài khoản cho cơ sở nằm ngoài địa bàn hoặc cơ sở chưa được phân công',
         );
       }
-    } else if (currentUser.role === RoleCode.LEADER && currentUser.areaCode && !currentUser.areaCode.includes('ALL')) {
+    } else if (
+      currentUser.role === RoleCode.LEADER &&
+      currentUser.areaCode &&
+      !parseAreaCodes(currentUser.areaCode).includes('ALL')
+    ) {
       const isAllowedArea = isAreaAllowed(currentUser.areaCode, facility.district, currentUser.role);
       if (!isAllowedArea) {
         throw new ForbiddenException(
@@ -237,27 +241,58 @@ export class UsersService {
     const limit = Math.max(1, query.limit || 20);
     const skip = (page - 1) * limit;
 
-    const where: any = {
-      deletedAt: null,
-    };
+    const andConditions: Prisma.UserWhereInput[] = [{ deletedAt: null }];
 
     if (query.role) {
-      where.role = query.role;
+      andConditions.push({ role: query.role });
     }
 
     if (query.search) {
-      where.OR = [
-        { fullName: { contains: query.search, mode: 'insensitive' } },
-        { email: { contains: query.search, mode: 'insensitive' } },
-        { phone: { contains: query.search, mode: 'insensitive' } },
-      ];
+      andConditions.push({
+        OR: [
+          { fullName: { contains: query.search, mode: 'insensitive' } },
+          { email: { contains: query.search, mode: 'insensitive' } },
+          { phone: { contains: query.search, mode: 'insensitive' } },
+        ],
+      });
     }
 
-    // Áp dụng giới hạn địa bàn cho LEADER
-    if (currentUser.role === RoleCode.LEADER && currentUser.areaCode && !currentUser.areaCode.includes('ALL')) {
-      const allowedAreas = parseAreaCodes(currentUser.areaCode);
-      where.areaCode = { in: allowedAreas };
+    if (query.areaCode) {
+      const requestedAreas = parseAreaCodes(query.areaCode);
+      if (requestedAreas.length > 0 && !requestedAreas.includes('ALL')) {
+        andConditions.push({
+          OR: [
+            { areaCode: { in: requestedAreas } },
+            {
+              ownedFacilities: {
+                some: { district: { in: requestedAreas }, deletedAt: null },
+              },
+            },
+          ],
+        });
+      }
     }
+
+    // Áp dụng giới hạn địa bàn cho LEADER (nếu không phải ALL)
+    if (
+      currentUser.role === RoleCode.LEADER &&
+      currentUser.areaCode &&
+      !parseAreaCodes(currentUser.areaCode).includes('ALL')
+    ) {
+      const allowedAreas = parseAreaCodes(currentUser.areaCode);
+      andConditions.push({
+        OR: [
+          { areaCode: { in: allowedAreas } },
+          {
+            ownedFacilities: {
+              some: { district: { in: allowedAreas }, deletedAt: null },
+            },
+          },
+        ],
+      });
+    }
+
+    const where: Prisma.UserWhereInput = { AND: andConditions };
 
     const [total, items] = await Promise.all([
       this.prisma.user.count({ where }),
@@ -312,9 +347,9 @@ export class UsersService {
   }
 
   /**
-   * Tìm người dùng theo ID
+   * Tìm người dùng theo ID kèm kiểm soát phạm vi (chống IDOR)
    */
-  async findById(id: string) {
+  async findById(currentUser: AuthenticatedUser, id: string) {
     const user = await this.prisma.user.findFirst({
       where: { id, deletedAt: null },
       select: {
@@ -330,13 +365,16 @@ export class UsersService {
         failedLoginCount: true,
         lockedUntil: true,
         lastLoginAt: true,
+        provisionedById: true,
         createdAt: true,
         ownedFacilities: {
+          where: { deletedAt: null },
           select: {
             id: true,
             code: true,
             name: true,
             district: true,
+            assignedInspectorId: true,
           },
         },
       },
@@ -345,6 +383,43 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException('Không tìm thấy người dùng');
     }
+
+    // Kiểm tra phạm vi truy cập tránh IDOR
+    const isSelf = currentUser.id === user.id;
+    if (!isSelf && currentUser.role === RoleCode.INSPECTOR) {
+      const isProvisioner = user.provisionedById === currentUser.id;
+      const hasFacilityInScope = user.ownedFacilities.some(
+        (fac) =>
+          fac.assignedInspectorId === currentUser.id ||
+          isAreaAllowed(currentUser.areaCode, fac.district, currentUser.role),
+      );
+
+      if (!isProvisioner && !hasFacilityInScope) {
+        throw new ForbiddenException(
+          'Bạn không có quyền xem thông tin tài khoản ngoài phạm vi phụ trách',
+        );
+      }
+    } else if (
+      !isSelf &&
+      currentUser.role === RoleCode.LEADER &&
+      currentUser.areaCode &&
+      !parseAreaCodes(currentUser.areaCode).includes('ALL')
+    ) {
+      const userAreas = parseAreaCodes(user.areaCode);
+      const hasAreaOverlap = userAreas.some((area) =>
+        isAreaAllowed(currentUser.areaCode, area, currentUser.role),
+      );
+      const hasFacilityInScope = user.ownedFacilities.some((fac) =>
+        isAreaAllowed(currentUser.areaCode, fac.district, currentUser.role),
+      );
+
+      if (!hasAreaOverlap && !hasFacilityInScope) {
+        throw new ForbiddenException(
+          'Lãnh đạo không có quyền xem tài khoản ngoài địa bàn phụ trách',
+        );
+      }
+    }
+
     return user;
   }
 
@@ -361,7 +436,7 @@ export class UsersService {
       throw new ForbiddenException('Chỉ Quản trị viên mới được thay đổi trạng thái tài khoản');
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id } });
+    const user = await this.prisma.user.findFirst({ where: { id, deletedAt: null } });
     if (!user) {
       throw new NotFoundException('Không tìm thấy người dùng');
     }
@@ -370,9 +445,10 @@ export class UsersService {
       where: { id },
       data: {
         isActive,
-        // Nếu mở khóa, xóa luôn trạng thái khóa tạm
+        // Nếu mở khóa, xóa luôn trạng thái khóa tạm; nếu khóa, thu hồi refreshTokenHash
         lockedUntil: isActive ? null : user.lockedUntil,
         failedLoginCount: isActive ? 0 : user.failedLoginCount,
+        refreshTokenHash: isActive ? user.refreshTokenHash : null,
       },
       select: {
         id: true,
@@ -401,7 +477,7 @@ export class UsersService {
    * Reset mật khẩu người dùng
    */
   async resetPassword(currentUser: AuthenticatedUser, id: string, ipAddress?: string) {
-    const user = await this.prisma.user.findUnique({ where: { id } });
+    const user = await this.prisma.user.findFirst({ where: { id, deletedAt: null } });
     if (!user) {
       throw new NotFoundException('Không tìm thấy người dùng');
     }
@@ -420,6 +496,7 @@ export class UsersService {
         mustChangePassword: true,
         failedLoginCount: 0,
         lockedUntil: null,
+        refreshTokenHash: null, // Thu hồi refresh token cũ sau khi reset mật khẩu
       },
     });
 

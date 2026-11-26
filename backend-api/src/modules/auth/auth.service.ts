@@ -17,6 +17,17 @@ import { OwnerLoginDto } from './dto/owner-login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { Verify2FaDto } from './dto/verify-2fa.dto';
 
+interface TempMfaPayload {
+  sub: string;
+  isTempMfa: boolean;
+}
+
+interface RefreshPayload {
+  sub: string;
+  email: string;
+  role: RoleCode;
+}
+
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
 
@@ -175,7 +186,9 @@ export class AuthService {
 
     const isMatch = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isMatch) {
-      await this.handleFailedLogin(user.id, user.failedLoginCount, ipAddress);
+      const effectiveFailedCount =
+        user.lockedUntil && user.lockedUntil <= new Date() ? 0 : user.failedLoginCount;
+      await this.handleFailedLogin(user.id, effectiveFailedCount, ipAddress);
       throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
     }
 
@@ -213,9 +226,9 @@ export class AuthService {
    * 2. Hoàn tất xác thực MFA TOTP (Bước 2 của Đăng nhập cán bộ)
    */
   async verify2Fa(dto: Verify2FaDto, ipAddress?: string) {
-    let payload: any;
+    let payload: TempMfaPayload;
     try {
-      payload = await this.jwtService.verifyAsync(dto.tempToken, {
+      payload = await this.jwtService.verifyAsync<TempMfaPayload>(dto.tempToken, {
         secret: this.configService.get<string>('JWT_SECRET') || 'super_secret_jwt_key_pccc_g18',
       });
     } catch {
@@ -226,17 +239,31 @@ export class AuthService {
       throw new UnauthorizedException('Mã xác thực tạm thời không hợp lệ');
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
+    const user = await this.prisma.user.findFirst({
+      where: { id: payload.sub, deletedAt: null },
     });
 
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Tài khoản không tồn tại hoặc đã bị khóa');
     }
 
+    if (user.role === RoleCode.OWNER) {
+      throw new ForbiddenException('Tài khoản Chủ cơ sở không sử dụng luồng MFA nội bộ');
+    }
+
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      const remainingMinutes = Math.ceil(
+        (user.lockedUntil.getTime() - Date.now()) / (60 * 1000),
+      );
+      throw new UnauthorizedException(
+        `Tài khoản đang bị tạm khóa. Vui lòng thử lại sau ${remainingMinutes} phút.`,
+      );
+    }
+
     // Kiểm tra mã OTP: hỗ trợ cả mã TOTP chuẩn RFC 6238 lẫn mã mẫu demo '123456'
     let isValidOtp = false;
-    if (dto.code === '123456') {
+    const allowDemoOtp = this.configService.get<string>('NODE_ENV') !== 'production';
+    if (allowDemoOtp && dto.code === '123456') {
       isValidOtp = true;
     } else if (user.twoFactorSecret) {
       isValidOtp = authenticator.verify({
@@ -246,7 +273,9 @@ export class AuthService {
     }
 
     if (!isValidOtp) {
-      await this.handleFailedLogin(user.id, user.failedLoginCount, ipAddress);
+      const effectiveFailedCount =
+        user.lockedUntil && user.lockedUntil <= new Date() ? 0 : user.failedLoginCount;
+      await this.handleFailedLogin(user.id, effectiveFailedCount, ipAddress);
       throw new UnauthorizedException('Mã xác thực OTP không chính xác');
     }
 
@@ -298,7 +327,9 @@ export class AuthService {
 
     const isMatch = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isMatch) {
-      await this.handleFailedLogin(user.id, user.failedLoginCount, ipAddress);
+      const effectiveFailedCount =
+        user.lockedUntil && user.lockedUntil <= new Date() ? 0 : user.failedLoginCount;
+      await this.handleFailedLogin(user.id, effectiveFailedCount, ipAddress);
       throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
     }
 
@@ -324,21 +355,25 @@ export class AuthService {
     const refreshSecret =
       this.configService.get<string>('JWT_REFRESH_SECRET') || 'g18_pccc_jwt_refresh_secret_key';
 
-    let payload: any;
+    let payload: RefreshPayload;
     try {
-      payload = await this.jwtService.verifyAsync(dto.refreshToken, {
+      payload = await this.jwtService.verifyAsync<RefreshPayload>(dto.refreshToken, {
         secret: refreshSecret,
       });
     } catch {
       throw new UnauthorizedException('Refresh token không hợp lệ hoặc đã hết hạn');
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
+    const user = await this.prisma.user.findFirst({
+      where: { id: payload.sub, deletedAt: null },
     });
 
     if (!user || !user.isActive || !user.refreshTokenHash) {
       throw new UnauthorizedException('Phiên đăng nhập đã bị thu hồi');
+    }
+
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      throw new UnauthorizedException('Tài khoản đang bị tạm khóa');
     }
 
     const isMatch = await bcrypt.compare(dto.refreshToken, user.refreshTokenHash);
@@ -358,12 +393,12 @@ export class AuthService {
       throw new BadRequestException('Mật khẩu mới không được trùng mật khẩu cũ');
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
     });
 
-    if (!user) {
-      throw new UnauthorizedException('Người dùng không tồn tại');
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('Người dùng không tồn tại hoặc đã bị vô hiệu hóa');
     }
 
     const isMatch = await bcrypt.compare(dto.oldPassword, user.passwordHash);

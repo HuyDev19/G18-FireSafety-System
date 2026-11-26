@@ -1,5 +1,7 @@
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { RiskLevelCode } from '@prisma/client';
+import { RiskLevelCode, RoleCode } from '@prisma/client';
+import { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { RiskService } from './risk.service';
@@ -12,6 +14,7 @@ describe('RiskService (FR-03 Trigger & Trend Chart Engine)', () => {
   const mockPrisma = {
     facility: {
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       update: jest.fn(),
     },
     inspection: {
@@ -167,6 +170,88 @@ describe('RiskService (FR-03 Trigger & Trend Chart Engine)', () => {
           action: 'VIOLATION_RESOLVED_RISK_UPDATE',
           entity: 'VIOLATION',
           entityId: 'vio-1',
+        }),
+      );
+    });
+  });
+
+  describe('getRiskScoreHistories (IDOR & Scope Enforcement)', () => {
+    const facilityRecord = {
+      id: 'fac-q1',
+      district: 'Quận 1',
+      ownerUserId: 'owner-1',
+      assignedInspectorId: 'inspector-q1',
+    };
+
+    it('should throw NotFoundException when facility does not exist', async () => {
+      mockPrisma.facility.findFirst.mockResolvedValue(null);
+
+      const admin: AuthenticatedUser = {
+        id: 'admin-1',
+        email: 'admin@pccc.gov.vn',
+        role: RoleCode.ADMIN,
+        fullName: 'Admin',
+      };
+
+      await expect(service.getRiskScoreHistories('missing-fac', admin)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should reject OWNER accessing another owner facility risk history', async () => {
+      mockPrisma.facility.findFirst.mockResolvedValue(facilityRecord);
+
+      const otherOwner: AuthenticatedUser = {
+        id: 'owner-2',
+        email: 'other@example.com',
+        role: RoleCode.OWNER,
+        fullName: 'Other Owner',
+      };
+
+      await expect(service.getRiskScoreHistories('fac-q1', otherOwner)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('should reject INSPECTOR accessing facility outside their area (Quận 1 vs Quận 10)', async () => {
+      mockPrisma.facility.findFirst.mockResolvedValue({
+        ...facilityRecord,
+        district: 'Quận 10',
+        assignedInspectorId: 'other-inspector',
+      });
+
+      const inspectorQ1: AuthenticatedUser = {
+        id: 'inspector-q1',
+        email: 'cb@pccc.gov.vn',
+        role: RoleCode.INSPECTOR,
+        areaCode: 'Quận 1',
+        fullName: 'CB Q1',
+      };
+
+      await expect(service.getRiskScoreHistories('fac-q1', inspectorQ1)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('should return chronological risk history for authorized OWNER', async () => {
+      mockPrisma.facility.findFirst.mockResolvedValue(facilityRecord);
+      mockPrisma.riskScoreHistory.findMany.mockResolvedValue([
+        { id: 'hist-1', scoreBefore: 40, scoreAfter: 70 },
+      ]);
+
+      const owner: AuthenticatedUser = {
+        id: 'owner-1',
+        email: 'owner1@example.com',
+        role: RoleCode.OWNER,
+        fullName: 'Owner 1',
+      };
+
+      const histories = await service.getRiskScoreHistories('fac-q1', owner);
+      expect(histories).toHaveLength(1);
+      expect(mockPrisma.riskScoreHistory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { facilityId: 'fac-q1' },
+          orderBy: { recordedAt: 'asc' },
         }),
       );
     });

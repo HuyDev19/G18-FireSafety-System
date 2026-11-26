@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { QueryAuditDto } from './dto/query-audit.dto';
 
@@ -81,7 +82,7 @@ export class AuditService {
     const limit = Math.max(1, query.limit || 20);
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.AuditLogWhereInput = {};
     if (query.entity) {
       where.entity = query.entity;
     }
