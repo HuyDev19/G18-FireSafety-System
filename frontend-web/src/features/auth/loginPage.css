@@ -42,8 +42,8 @@
   background: linear-gradient(155deg, #102f53 0%, #0d3b6e 49%, #092e55 100%);
 }
 
-.login-intro-copy { position: relative; z-index: 1; flex: 0 0 auto; }
-.login-brand { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 12px; width: fit-content; color: inherit; text-decoration: none; }
+.login-intro-copy { position: relative; z-index: 1; flex: 0 0 auto; padding-top: 48px; }
+.login-brand { position: absolute; z-index: 2; top: 34px; left: 40px; display: inline-flex; align-items: center; gap: 12px; width: fit-content; color: inherit; text-decoration: none; }
 .login-brand-mark { display: grid; width: 48px; height: 48px; flex: 0 0 auto; place-items: center; overflow: hidden; border: 1px solid rgb(255 255 255 / 35%); border-radius: 13px; background: #fff; }
 .login-brand-mark img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .login-brand-name { white-space: nowrap; font-size: 18px; font-weight: 720; letter-spacing: .025em; line-height: 1.25; }
@@ -104,6 +104,11 @@
 .login-submit { display: flex; min-height: 48px; align-items: center; justify-content: center; gap: 10px; margin-top: 1px; border: 1px solid var(--login-navy); border-radius: 9px; color: #fff; background: var(--login-navy); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; transition: background-color .16s ease, transform .16s ease; }
 .login-submit:hover { background: var(--login-navy-dark); }
 .login-submit:active { transform: translateY(1px); }
+.login-submit:disabled, .login-submit:disabled:hover { cursor: wait; opacity: .88; background: var(--login-navy); }
+.login-demo-button { width: 100%; min-width: 0; min-height: 44px; padding: 10px 14px; border: 1px solid #d7e0e9; border-radius: 9px; color: var(--login-navy); background: #fff; font: inherit; font-size: 13px; font-weight: 650; line-height: 1.5; overflow-wrap: anywhere; cursor: pointer; transition: background-color .16s ease, border-color .16s ease; }
+.login-demo-button:hover { border-color: #a5bbcf; background: #f3f6fa; }
+.login-demo-button:active { background: #eaf0f6; }
+.login-demo-button:disabled, .login-demo-button:disabled:hover { border-color: #d7e0e9; color: #52677f; background: #f5f7fa; cursor: not-allowed; }
 .login-status { min-height: 18px; margin: -8px 0 0; color: #375d7d; font-size: 12px; line-height: 1.5; }
 .login-help { margin-top: 22px; padding-top: 19px; border-top: 1px solid #e9eef3; color: #52677f; font-size: 12px; text-align: center; }
 .login-copyright { padding-top: 25px; color: #5d7185; font-size: 10px; text-align: center; }
@@ -113,7 +118,7 @@
   .login-page { padding: 20px; }
   .login-shell { min-height: 640px; grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr); }
   .login-intro { gap: clamp(24px, 3vh, 30px); padding: 26px 20px 16px; }
-  .login-brand { gap: 8px; }
+  .login-brand { top: 26px; left: 20px; gap: 8px; }
   .login-brand-name { font-size: clamp(13.5px, 2vw, 18px); }
   .login-brand-name b { font-size: clamp(14px, 2.1vw, 18px); }
   .login-intro-content { margin-top: 20px; }
@@ -148,6 +153,7 @@
   .login-page { padding-top: 16px; padding-bottom: 16px; }
   .login-shell { min-height: 620px; }
   .login-intro { gap: clamp(22px, 3.1vh, 26px); padding-top: 22px; padding-bottom: 16px; }
+  .login-brand { top: 22px; }
   .login-intro-content { margin-top: 20px; }
   .login-intro-title { font-size: clamp(24px, 2.8vw, 32px); }
   .login-building-art { flex: 0 0 auto; margin: 0; }
