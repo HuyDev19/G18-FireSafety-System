@@ -15,8 +15,11 @@ import {
   clearVerifiedMfaResult,
   getPendingMfaExpiresAt,
   getInternalLoginErrorMessage,
+  getOwnerLoginErrorMessage,
   loginInternal,
+  loginOwner,
   retainPendingMfaToken,
+  retainAuthenticatedResult,
   retainVerifiedMfaResult,
   type VerifiedMfaResult,
 } from './authApi';
@@ -175,20 +178,19 @@ export function LoginPage() {
       return;
     }
 
-    if (portal === 'business') {
-      setMessage('Đăng nhập Cổng Doanh nghiệp sẽ được tích hợp ở bước tiếp theo. Thông tin chưa được gửi.');
-      return;
-    }
-
     clearPendingMfaToken();
     clearVerifiedMfaResult();
     const controller = new AbortController();
     const requestId = ++loginRequestId.current;
     activeLoginRequest.current = controller;
     setIsSubmitting(true);
-    setMessage('Đang xác thực thông tin đăng nhập.');
+    setMessage(portal === 'business' ? 'Đang xác thực tài khoản doanh nghiệp.' : 'Đang xác thực thông tin đăng nhập.');
 
-    void submitInternalLogin(normalizedEmail, password, controller, requestId);
+    if (portal === 'business') {
+      void submitOwnerLogin(normalizedEmail, password, controller, requestId);
+    } else {
+      void submitInternalLogin(normalizedEmail, password, controller, requestId);
+    }
   }
 
   async function submitInternalLogin(emailValue: string, passwordValue: string, controller: AbortController, requestId: number) {
@@ -226,6 +228,24 @@ export function LoginPage() {
     }
   }
 
+  async function submitOwnerLogin(emailValue: string, passwordValue: string, controller: AbortController, requestId: number) {
+    try {
+      const result = await loginOwner({ email: emailValue, password: passwordValue }, controller.signal);
+      if (requestId !== loginRequestId.current || controller.signal.aborted || portal !== 'business') return;
+
+      retainAuthenticatedResult(result);
+      setMessage('Thông tin đăng nhập đã được xác thực. Phiên đăng nhập sẽ được thiết lập ở bước tiếp theo.');
+    } catch (error) {
+      if (requestId !== loginRequestId.current || controller.signal.aborted || portal !== 'business') return;
+      setMessage(getOwnerLoginErrorMessage(error));
+    } finally {
+      if (requestId === loginRequestId.current) {
+        activeLoginRequest.current = null;
+        setIsSubmitting(false);
+      }
+    }
+  }
+
   function cancelMfaVerification() {
     clearPendingMfaToken();
     setIsOtpModalOpen(false);
@@ -238,7 +258,7 @@ export function LoginPage() {
   }
 
   function handleMfaVerified(_result: VerifiedMfaResult) {
-    retainVerifiedMfaResult(_result);
+    retainAuthenticatedResult({ portal: 'INTERNAL', ..._result });
     clearPendingMfaToken();
     setIsOtpModalOpen(false);
     setMfaExpiresAt(null);
