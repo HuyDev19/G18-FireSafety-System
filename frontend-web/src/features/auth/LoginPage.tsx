@@ -13,6 +13,7 @@ import pcccLogo from '../../assets/pccc-logo.png';
 import {
   clearPendingMfaToken,
   clearVerifiedMfaResult,
+  consumeAuthenticatedResult,
   getPendingMfaExpiresAt,
   getInternalLoginErrorMessage,
   getOwnerLoginErrorMessage,
@@ -23,6 +24,7 @@ import {
   retainVerifiedMfaResult,
   type VerifiedMfaResult,
 } from './authApi';
+import { useAuthStore } from '../../stores/useAuthStore';
 import { OtpVerificationModal } from './components/OtpVerificationModal';
 import './loginPage.css';
 
@@ -57,6 +59,8 @@ const portalCopy: Record<Portal, { title: string; description: string; audience:
 };
 
 export function LoginPage() {
+  const setAuth = useAuthStore((state) => state.setAuth);
+  const setMfaAuthenticated = useAuthStore((state) => state.setMfaAuthenticated);
   const [portal, setPortal] = useState<Portal>('officer');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -73,6 +77,57 @@ export function LoginPage() {
   const activeLoginRequest = useRef<AbortController | null>(null);
   const loginRequestId = useRef(0);
   const copy = portalCopy[portal];
+
+  function commitAuthenticatedHandoff(expectedPortal: 'INTERNAL' | 'OWNER'): boolean {
+    const result: unknown = consumeAuthenticatedResult();
+    if (!result || typeof result !== 'object') return false;
+
+    const candidate = result as Record<string, unknown>;
+    const user = candidate.user;
+    if (
+      candidate.portal !== expectedPortal
+      || typeof candidate.accessToken !== 'string' || !candidate.accessToken.trim()
+      || typeof candidate.refreshToken !== 'string' || !candidate.refreshToken.trim()
+      || !user || typeof user !== 'object'
+    ) return false;
+
+    const profile = user as Record<string, unknown>;
+    if (
+      typeof profile.id !== 'string' || !profile.id.trim()
+      || typeof profile.email !== 'string' || !profile.email.trim()
+      || typeof profile.fullName !== 'string' || !profile.fullName.trim()
+    ) return false;
+
+    if (expectedPortal === 'INTERNAL') {
+      if (!['ADMIN', 'LEADER', 'INSPECTOR'].includes(String(profile.role))) return false;
+      setAuth(candidate.accessToken, {
+        id: profile.id,
+        email: profile.email,
+        fullName: profile.fullName,
+        role: profile.role as 'ADMIN' | 'LEADER' | 'INSPECTOR',
+        ...(typeof profile.areaCode === 'string' ? { areaCode: profile.areaCode } : {}),
+      }, candidate.refreshToken);
+    } else {
+      if (profile.role !== 'OWNER' || typeof candidate.mustChangePassword !== 'boolean') return false;
+      setAuth(
+        candidate.accessToken,
+        {
+          id: profile.id,
+          email: profile.email,
+          fullName: profile.fullName,
+          role: 'OWNER',
+          mustChangePassword: candidate.mustChangePassword,
+          ...(typeof profile.areaCode === 'string' ? { areaCode: profile.areaCode } : {}),
+        },
+        candidate.refreshToken,
+      );
+    }
+
+    // setAuth's current inference depends on isTwoFactorEnabled, which auth responses omit.
+    // This point is reached only after direct authentication or successful MFA verification.
+    setMfaAuthenticated(true);
+    return true;
+  }
 
   useEffect(() => {
     if (!focusErrorAfterRender.current) return;
@@ -215,7 +270,9 @@ export function LoginPage() {
           refreshToken: result.refreshToken,
           user: result.user,
         });
-        setMessage('Thông tin đăng nhập đã được xác thực. Phiên đăng nhập sẽ được thiết lập ở bước tiếp theo.');
+        setMessage(commitAuthenticatedHandoff('INTERNAL')
+          ? 'Đăng nhập thành công.'
+          : 'Không thể hoàn tất phiên đăng nhập do kết quả xác thực không hợp lệ. Vui lòng thử lại.');
       }
     } catch (error) {
       if (requestId !== loginRequestId.current || controller.signal.aborted || portal !== 'officer') return;
@@ -234,7 +291,9 @@ export function LoginPage() {
       if (requestId !== loginRequestId.current || controller.signal.aborted || portal !== 'business') return;
 
       retainAuthenticatedResult(result);
-      setMessage('Thông tin đăng nhập đã được xác thực. Phiên đăng nhập sẽ được thiết lập ở bước tiếp theo.');
+      setMessage(commitAuthenticatedHandoff('OWNER')
+        ? 'Đăng nhập thành công.'
+        : 'Không thể hoàn tất phiên đăng nhập do kết quả xác thực không hợp lệ. Vui lòng thử lại.');
     } catch (error) {
       if (requestId !== loginRequestId.current || controller.signal.aborted || portal !== 'business') return;
       setMessage(getOwnerLoginErrorMessage(error));
@@ -262,7 +321,9 @@ export function LoginPage() {
     clearPendingMfaToken();
     setIsOtpModalOpen(false);
     setMfaExpiresAt(null);
-    setMessage('Xác thực hai bước thành công. Phiên đăng nhập sẽ được thiết lập ở bước tiếp theo.');
+    setMessage(commitAuthenticatedHandoff('INTERNAL')
+      ? 'Xác thực hai bước thành công. Đăng nhập thành công.'
+      : 'Không thể hoàn tất phiên đăng nhập do kết quả xác thực không hợp lệ. Vui lòng thử lại.');
   }
 
   return (
