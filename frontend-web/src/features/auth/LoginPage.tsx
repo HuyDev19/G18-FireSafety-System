@@ -12,10 +12,15 @@ import buildingImage from '../../assets/pccc-building-cutaway.png';
 import pcccLogo from '../../assets/pccc-logo.png';
 import {
   clearPendingMfaToken,
+  clearVerifiedMfaResult,
+  getPendingMfaExpiresAt,
   getInternalLoginErrorMessage,
   loginInternal,
   retainPendingMfaToken,
+  retainVerifiedMfaResult,
+  type VerifiedMfaResult,
 } from './authApi';
+import { OtpVerificationModal } from './components/OtpVerificationModal';
 import './loginPage.css';
 
 type Portal = 'officer' | 'business';
@@ -56,6 +61,8 @@ export function LoginPage() {
   const [message, setMessage] = useState('');
   const [errors, setErrors] = useState<LoginErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isOtpModalOpen, setIsOtpModalOpen] = useState(false);
+  const [mfaExpiresAt, setMfaExpiresAt] = useState<number | null>(null);
   const tabRefs = useRef<Record<Portal, HTMLButtonElement | null>>({ officer: null, business: null });
   const emailInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
@@ -75,6 +82,8 @@ export function LoginPage() {
     loginRequestId.current += 1;
     activeLoginRequest.current?.abort();
     activeLoginRequest.current = null;
+    clearPendingMfaToken();
+    clearVerifiedMfaResult();
   }, []);
 
   function selectPortal(nextPortal: Portal) {
@@ -83,6 +92,9 @@ export function LoginPage() {
     activeLoginRequest.current?.abort();
     activeLoginRequest.current = null;
     clearPendingMfaToken();
+    clearVerifiedMfaResult();
+    setIsOtpModalOpen(false);
+    setMfaExpiresAt(null);
     setPortal(nextPortal);
     setPassword('');
     setPasswordVisible(false);
@@ -100,7 +112,9 @@ export function LoginPage() {
   }
 
   function handleEmailChange(value: string) {
+    cancelActiveLoginRequest();
     clearPendingMfaToken();
+    clearVerifiedMfaResult();
     setEmail(value);
     setMessage('');
     setErrors((currentErrors) => currentErrors.email
@@ -109,12 +123,22 @@ export function LoginPage() {
   }
 
   function handlePasswordChange(value: string) {
+    cancelActiveLoginRequest();
     clearPendingMfaToken();
+    clearVerifiedMfaResult();
     setPassword(value);
     setMessage('');
     setErrors((currentErrors) => currentErrors.password
       ? { ...currentErrors, password: validatePassword(value) }
       : currentErrors);
+  }
+
+  function cancelActiveLoginRequest() {
+    if (!activeLoginRequest.current) return;
+    loginRequestId.current += 1;
+    activeLoginRequest.current.abort();
+    activeLoginRequest.current = null;
+    setIsSubmitting(false);
   }
 
   function handleBlur(field: LoginField) {
@@ -157,6 +181,7 @@ export function LoginPage() {
     }
 
     clearPendingMfaToken();
+    clearVerifiedMfaResult();
     const controller = new AbortController();
     const requestId = ++loginRequestId.current;
     activeLoginRequest.current = controller;
@@ -173,9 +198,21 @@ export function LoginPage() {
 
       if (result.kind === 'mfa-required') {
         retainPendingMfaToken(result.tempToken);
-        setMessage('Mật khẩu đã được xác thực. Vui lòng tiếp tục bằng mã OTP 2FA.');
+        const expiresAt = getPendingMfaExpiresAt();
+        if (!expiresAt) {
+          clearPendingMfaToken();
+          setMessage('Phiên xác thực đã hết hạn. Vui lòng đăng nhập lại để nhận phiên MFA mới.');
+          return;
+        }
+        setMfaExpiresAt(expiresAt);
+        setIsOtpModalOpen(true);
       } else {
         clearPendingMfaToken();
+        retainVerifiedMfaResult({
+          accessToken: result.accessToken,
+          refreshToken: result.refreshToken,
+          user: result.user,
+        });
         setMessage('Thông tin đăng nhập đã được xác thực. Phiên đăng nhập sẽ được thiết lập ở bước tiếp theo.');
       }
     } catch (error) {
@@ -189,16 +226,35 @@ export function LoginPage() {
     }
   }
 
+  function cancelMfaVerification() {
+    clearPendingMfaToken();
+    setIsOtpModalOpen(false);
+    setMfaExpiresAt(null);
+    setMessage('Bạn đã hủy xác thực hai bước. Hãy đăng nhập lại để tiếp tục.');
+  }
+
+  function handleMfaExpired() {
+    clearPendingMfaToken();
+  }
+
+  function handleMfaVerified(_result: VerifiedMfaResult) {
+    retainVerifiedMfaResult(_result);
+    clearPendingMfaToken();
+    setIsOtpModalOpen(false);
+    setMfaExpiresAt(null);
+    setMessage('Xác thực hai bước thành công. Phiên đăng nhập sẽ được thiết lập ở bước tiếp theo.');
+  }
+
   return (
     <main className="login-page">
-      <div className="login-shell">
+      <div className="login-shell" aria-hidden={isOtpModalOpen}>
         <section className="login-intro" aria-label="Giới thiệu hệ thống">
-            <a className="login-brand" href="/login" aria-label="Quản lý cơ sở PCCC, trang đăng nhập">
-              <span className="login-brand-mark" aria-hidden="true">
-                <img src={pcccLogo} alt="" />
-              </span>
-              <span className="login-brand-name">QUẢN LÝ CƠ SỞ <b>PCCC</b></span>
-            </a>
+          <a className="login-brand" href="/login" aria-label="Quản lý cơ sở PCCC, trang đăng nhập">
+            <span className="login-brand-mark" aria-hidden="true">
+              <img src={pcccLogo} alt="" />
+            </span>
+            <span className="login-brand-name">QUẢN LÝ CƠ SỞ <b>PCCC</b></span>
+          </a>
 
           <div className="login-intro-copy">
             <div className="login-intro-content">
@@ -294,6 +350,14 @@ export function LoginPage() {
           <footer className="login-copyright">© 2026 Quản lý cơ sở PCCC <span aria-hidden="true">·</span> Cổng thông tin an toàn</footer>
         </section>
       </div>
+      {isOtpModalOpen && mfaExpiresAt !== null && (
+        <OtpVerificationModal
+          expiresAt={mfaExpiresAt}
+          onCancel={cancelMfaVerification}
+          onExpired={handleMfaExpired}
+          onVerified={handleMfaVerified}
+        />
+      )}
     </main>
   );
 }

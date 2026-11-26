@@ -17,6 +17,12 @@ export type InternalLoginResult =
   | { kind: 'mfa-required'; tempToken: string; message?: string }
   | { kind: 'authenticated'; accessToken: string; refreshToken: string; user: UserProfile };
 
+export interface VerifiedMfaResult {
+  accessToken: string;
+  refreshToken: string;
+  user: UserProfile;
+}
+
 export type InternalLoginErrorCode =
   | 'BAD_REQUEST'
   | 'UNAUTHORIZED'
@@ -27,6 +33,8 @@ export type InternalLoginErrorCode =
   | 'SERVER'
   | 'INVALID_RESPONSE'
   | 'ROLE_NOT_ALLOWED'
+  | 'OTP_INVALID'
+  | 'MFA_EXPIRED'
   | 'UNKNOWN';
 
 export class InternalLoginError extends Error {
@@ -38,6 +46,12 @@ export class InternalLoginError extends Error {
 
 type InternalRole = Extract<RoleCode, 'ADMIN' | 'LEADER' | 'INSPECTOR'>;
 const internalRoles: readonly InternalRole[] = ['ADMIN', 'LEADER', 'INSPECTOR'];
+// Public MFA verify must not attach a stored access token or run apiClient's global 401 logout interceptor.
+const publicMfaClient = axios.create({
+  baseURL: apiClient.defaults.baseURL,
+  timeout: apiClient.defaults.timeout ?? 15000,
+  headers: { 'Content-Type': 'application/json' },
+});
 
 function isInternalRole(value: unknown): value is InternalRole {
   return typeof value === 'string' && internalRoles.includes(value as InternalRole);
@@ -118,7 +132,14 @@ function mapRequestError(error: unknown): InternalLoginError {
 
     const status = error.response?.status;
     if (status === 400) return new InternalLoginError('BAD_REQUEST');
-    if (status === 401) return new InternalLoginError('UNAUTHORIZED');
+    if (status === 401) {
+      const message = getResponseMessage(error.response?.data).toLocaleLowerCase('vi');
+      if (message.includes('mã xác thực otp không chính xác')) return new InternalLoginError('OTP_INVALID');
+      if (message.includes('phiên xác thực mfa') || message.includes('tạm thời không hợp lệ')) {
+        return new InternalLoginError('MFA_EXPIRED');
+      }
+      return new InternalLoginError('UNAUTHORIZED');
+    }
     if (status === 403) return new InternalLoginError('FORBIDDEN');
     if (status === 429) return new InternalLoginError('TOO_MANY_REQUESTS');
     if (status === 408) return new InternalLoginError('TIMEOUT');
@@ -127,6 +148,13 @@ function mapRequestError(error: unknown): InternalLoginError {
   }
 
   return error instanceof InternalLoginError ? error : new InternalLoginError('UNKNOWN');
+}
+
+function getResponseMessage(value: unknown): string {
+  if (!isRecord(value)) return '';
+  if (typeof value.message === 'string') return value.message;
+  if (isRecord(value.data) && typeof value.data.message === 'string') return value.data.message;
+  return '';
 }
 
 const errorMessages: Record<InternalLoginErrorCode, string> = {
@@ -139,11 +167,24 @@ const errorMessages: Record<InternalLoginErrorCode, string> = {
   SERVER: 'Máy chủ đang gặp sự cố. Vui lòng thử lại sau.',
   INVALID_RESPONSE: 'Máy chủ trả về dữ liệu đăng nhập không hợp lệ. Vui lòng thử lại sau.',
   ROLE_NOT_ALLOWED: 'Tài khoản này thuộc Cổng Doanh nghiệp, không thể đăng nhập tại Cổng Cán bộ PCCC.',
+  OTP_INVALID: 'Mã OTP chưa chính xác. Vui lòng kiểm tra và thử lại.',
+  MFA_EXPIRED: 'Phiên xác thực đã hết hạn hoặc không còn hợp lệ. Vui lòng đăng nhập lại để nhận phiên mới.',
   UNKNOWN: 'Không thể đăng nhập lúc này. Vui lòng thử lại.',
 };
 
 export function getInternalLoginErrorMessage(error: unknown): string {
   return errorMessages[mapRequestError(error).code];
+}
+
+export function getMfaVerifyErrorCode(error: unknown): InternalLoginErrorCode {
+  return mapRequestError(error).code;
+}
+
+export function getMfaVerifyErrorMessage(error: unknown): string {
+  const code = mapRequestError(error).code;
+  if (code === 'UNAUTHORIZED') return 'Máy chủ từ chối xác thực OTP. Vui lòng kiểm tra mã và thử lại; nếu phiên không còn hợp lệ, hãy đăng nhập lại.';
+  if (code === 'FORBIDDEN') return 'Tài khoản không được phép hoàn tất xác thực hai bước.';
+  return errorMessages[code];
 }
 
 export async function loginInternal(
@@ -161,8 +202,42 @@ export async function loginInternal(
   return parseLoginResult(response);
 }
 
+function parseVerifiedMfaResult(value: unknown): VerifiedMfaResult {
+  const envelope = parseEnvelope(value);
+  if (!isRecord(envelope.data)) throw new InternalLoginError('INVALID_RESPONSE');
+  const data = envelope.data;
+  if (!requiredString(data.accessToken) || !requiredString(data.refreshToken)) {
+    throw new InternalLoginError('INVALID_RESPONSE');
+  }
+
+  return {
+    accessToken: data.accessToken,
+    refreshToken: data.refreshToken,
+    user: parseUser(data.user),
+  };
+}
+
+export async function verifyInternalMfa(
+  tempToken: string,
+  code: string,
+  signal: AbortSignal,
+): Promise<VerifiedMfaResult> {
+  let response: unknown;
+  try {
+    const result = await publicMfaClient.post<unknown>('/auth/2fa/verify', { tempToken, code }, { signal });
+    response = result.data;
+  } catch (error) {
+    throw mapRequestError(error);
+  }
+
+  return parseVerifiedMfaResult(response);
+}
+
 const MFA_TOKEN_LIFETIME_MS = 5 * 60 * 1000;
 let pendingMfa: { token: string; expiresAt: number } | null = null;
+const VERIFIED_RESULT_HANDOFF_LIFETIME_MS = 60 * 1000;
+let verifiedMfaHandoff: { result: VerifiedMfaResult; expiresAt: number } | null = null;
+let verifiedMfaHandoffTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function retainPendingMfaToken(token: string): void {
   pendingMfa = { token, expiresAt: Date.now() + MFA_TOKEN_LIFETIME_MS };
@@ -176,6 +251,42 @@ export function getPendingMfaToken(): string | null {
   return pendingMfa.token;
 }
 
+export function getPendingMfaExpiresAt(): number | null {
+  if (!pendingMfa || Date.now() >= pendingMfa.expiresAt) {
+    pendingMfa = null;
+    return null;
+  }
+  return pendingMfa.expiresAt;
+}
+
 export function clearPendingMfaToken(): void {
   pendingMfa = null;
+}
+
+/** Keeps a successful MFA result in memory briefly so Task 07 can consume it once. */
+export function retainVerifiedMfaResult(result: VerifiedMfaResult): void {
+  if (verifiedMfaHandoffTimer !== null) clearTimeout(verifiedMfaHandoffTimer);
+  verifiedMfaHandoff = {
+    result,
+    expiresAt: Date.now() + VERIFIED_RESULT_HANDOFF_LIFETIME_MS,
+  };
+  verifiedMfaHandoffTimer = setTimeout(() => {
+    verifiedMfaHandoff = null;
+    verifiedMfaHandoffTimer = null;
+  }, VERIFIED_RESULT_HANDOFF_LIFETIME_MS);
+}
+
+export function consumeVerifiedMfaResult(): VerifiedMfaResult | null {
+  const handoff = verifiedMfaHandoff;
+  verifiedMfaHandoff = null;
+  if (verifiedMfaHandoffTimer !== null) clearTimeout(verifiedMfaHandoffTimer);
+  verifiedMfaHandoffTimer = null;
+  if (!handoff || Date.now() >= handoff.expiresAt) return null;
+  return handoff.result;
+}
+
+export function clearVerifiedMfaResult(): void {
+  verifiedMfaHandoff = null;
+  if (verifiedMfaHandoffTimer !== null) clearTimeout(verifiedMfaHandoffTimer);
+  verifiedMfaHandoffTimer = null;
 }
