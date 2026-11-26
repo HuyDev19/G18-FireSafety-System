@@ -1,4 +1,5 @@
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
   CircleAlert,
@@ -26,9 +27,11 @@ import {
 } from './authApi';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { OtpVerificationModal } from './components/OtpVerificationModal';
+import { getLoginPortal, getRoleLandingPage, hasAuthenticatedSession, useAuthHydrated, type LoginPortal } from './authRouting';
+import { PasswordChangeRequired } from './ProtectedRoute';
 import './loginPage.css';
 
-type Portal = 'officer' | 'business';
+type Portal = LoginPortal;
 type LoginField = 'email' | 'password';
 type LoginErrors = Partial<Record<LoginField, string>>;
 
@@ -58,10 +61,19 @@ const portalCopy: Record<Portal, { title: string; description: string; audience:
   },
 };
 
-export function LoginPage() {
+interface LoginPageProps {
+  /** Enable only after Role 1 applies ProtectedRoute to the Owner routes. */
+  ownerRoutesProtected?: boolean;
+}
+
+export function LoginPage({ ownerRoutesProtected = false }: LoginPageProps) {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const hydrated = useAuthHydrated();
+  const session = useAuthStore();
   const setAuth = useAuthStore((state) => state.setAuth);
   const setMfaAuthenticated = useAuthStore((state) => state.setMfaAuthenticated);
-  const [portal, setPortal] = useState<Portal>('officer');
+  const [portal, setPortal] = useState<Portal>(() => getLoginPortal(pathname));
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -129,6 +141,21 @@ export function LoginPage() {
     return true;
   }
 
+  function completeLogin(expectedPortal: 'INTERNAL' | 'OWNER', successMessage: string) {
+    if (!commitAuthenticatedHandoff(expectedPortal)) {
+      setMessage('Không thể hoàn tất phiên đăng nhập do kết quả xác thực không hợp lệ. Vui lòng thử lại.');
+      return;
+    }
+    setPassword('');
+    setPasswordVisible(false);
+    setMessage(successMessage);
+    const committed = useAuthStore.getState();
+    if (!hasAuthenticatedSession(committed) || !committed.user) return;
+    // Until the Router is protected, a mandatory password change stays on the locked screen.
+    if (committed.user.mustChangePassword === true && !ownerRoutesProtected) return;
+    navigate(getRoleLandingPage(committed.user.role), { replace: true });
+  }
+
   useEffect(() => {
     if (!focusErrorAfterRender.current) return;
     focusErrorAfterRender.current = false;
@@ -144,8 +171,7 @@ export function LoginPage() {
     clearVerifiedMfaResult();
   }, []);
 
-  function selectPortal(nextPortal: Portal) {
-    if (nextPortal === portal) return;
+  const resetPortal = useCallback((nextPortal: Portal) => {
     loginRequestId.current += 1;
     activeLoginRequest.current?.abort();
     activeLoginRequest.current = null;
@@ -159,6 +185,19 @@ export function LoginPage() {
     setErrors({});
     setMessage('');
     setIsSubmitting(false);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!['/login', '/admin-portal/login', '/doanh-nghiep/login'].includes(pathname)) return;
+    resetPortal(getLoginPortal(pathname));
+  }, [pathname, resetPortal]);
+
+  function selectPortal(nextPortal: Portal) {
+    if (nextPortal === portal) return;
+    resetPortal(nextPortal);
+    if (pathname === '/admin-portal/login' || pathname === '/doanh-nghiep/login') {
+      navigate(nextPortal === 'business' ? '/doanh-nghiep/login' : '/admin-portal/login');
+    }
   }
 
   function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
@@ -270,9 +309,7 @@ export function LoginPage() {
           refreshToken: result.refreshToken,
           user: result.user,
         });
-        setMessage(commitAuthenticatedHandoff('INTERNAL')
-          ? 'Đăng nhập thành công.'
-          : 'Không thể hoàn tất phiên đăng nhập do kết quả xác thực không hợp lệ. Vui lòng thử lại.');
+        completeLogin('INTERNAL', 'Đăng nhập thành công.');
       }
     } catch (error) {
       if (requestId !== loginRequestId.current || controller.signal.aborted || portal !== 'officer') return;
@@ -291,9 +328,7 @@ export function LoginPage() {
       if (requestId !== loginRequestId.current || controller.signal.aborted || portal !== 'business') return;
 
       retainAuthenticatedResult(result);
-      setMessage(commitAuthenticatedHandoff('OWNER')
-        ? 'Đăng nhập thành công.'
-        : 'Không thể hoàn tất phiên đăng nhập do kết quả xác thực không hợp lệ. Vui lòng thử lại.');
+      completeLogin('OWNER', 'Đăng nhập thành công.');
     } catch (error) {
       if (requestId !== loginRequestId.current || controller.signal.aborted || portal !== 'business') return;
       setMessage(getOwnerLoginErrorMessage(error));
@@ -321,9 +356,11 @@ export function LoginPage() {
     clearPendingMfaToken();
     setIsOtpModalOpen(false);
     setMfaExpiresAt(null);
-    setMessage(commitAuthenticatedHandoff('INTERNAL')
-      ? 'Xác thực hai bước thành công. Đăng nhập thành công.'
-      : 'Không thể hoàn tất phiên đăng nhập do kết quả xác thực không hợp lệ. Vui lòng thử lại.');
+    completeLogin('INTERNAL', 'Xác thực hai bước thành công. Đăng nhập thành công.');
+  }
+
+  if (hydrated && hasAuthenticatedSession(session) && session.user?.mustChangePassword === true) {
+    return <PasswordChangeRequired key={session.user.id} />;
   }
 
   return (
